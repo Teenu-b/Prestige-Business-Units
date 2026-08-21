@@ -12,6 +12,7 @@ import {
   defaultSubstages,
   gateStatus,
   gstOn,
+  missingLeadFields,
   nextNumber,
   selectedOption,
 } from '../lib/workflow'
@@ -91,6 +92,49 @@ export function AppProvider({ children }) {
     const unitOpps = store.opportunities.filter((o) => o.businessUnitId === unit?.id)
     const visibleOpps = user ? unitOpps.filter((o) => canViewOpportunity(user, o)) : []
 
+    const addProposalVersion = (id, detail = 'New proposal version created') => {
+      patchOpp(
+        id,
+        (o) => {
+          const option = selectedOption(o)
+          const version = (o.proposals?.length || 0) + 1
+          const proposal = {
+            id: uid('prop'),
+            number: `${o.number.replace('PRS-26', 'PRS-P')}-v${version}`,
+            version,
+            estimateVersion: [...(o.estimates || [])].sort((a, b) => b.version - a.version)[0]?.version,
+            status: 'draft',
+            priceEx: option?.priceEx,
+            margin: option?.margin,
+            issuedAt: null,
+            presentedAt: null,
+            directorApproval: null,
+            acceptedAt: null,
+            signedDocName: '',
+          }
+          return {
+            ...o,
+            proposals: [...(o.proposals || []), proposal],
+            documents: [
+              {
+                id: uid('doc'),
+                type: 'proposal',
+                name: `${proposal.number}.pdf`,
+                version,
+                uploadedAt: nowIso(),
+                uploaderId: user.id,
+                size: 'generated',
+                mirrorStatus: 'pending',
+              },
+              ...(o.documents || []),
+            ],
+          }
+        },
+        'Generated proposal',
+        detail,
+      )
+    }
+
     return {
       store,
       user,
@@ -156,7 +200,7 @@ export function AppProvider({ children }) {
           customer: payload.customer,
           site: {
             ...payload.site,
-            line1: String(payload.site?.line1 || payload.customer?.billingAddress || '').trim(),
+            line1: String(payload.site?.line1 || '').trim(),
             suburb: String(payload.site?.suburb || '').trim(),
           },
           contact: payload.contact,
@@ -212,11 +256,67 @@ export function AppProvider({ children }) {
           acceptedValue: 0,
           closure: null,
         }
+        const qualified = missingLeadFields(opp).length === 0 && opp.owners.estimatorId
+        if (qualified) {
+          opp.stage = 2
+          opp.slaDueAt = addDays(createdAt, unit.slaDays[2] || 5)
+          opp.audit = [
+            { id: uid('aud'), at: createdAt, actorId: user.id, action: 'Advanced stage', detail: 'Moved to estimation' },
+            ...opp.audit,
+          ]
+        }
         setStore((prev) => ({ ...prev, opportunities: [opp, ...prev.opportunities] }))
         if (payload.estimatorId) {
           notify(payload.estimatorId, 'Lead assigned', `${number} is waiting for estimation.`, id)
         }
         return opp
+      },
+
+      saveLeadPack(id, payload) {
+        let advanced = false
+        patchOpp(
+          id,
+          (o) => {
+            const next = {
+              ...o,
+              customer: { ...o.customer, ...payload.customer },
+              site: { ...o.site, ...payload.site },
+              contact: { ...o.contact, ...payload.contact },
+              energy: { ...o.energy, ...payload.energy },
+              leadSource: payload.leadSource || o.leadSource,
+              referrerId: payload.referrerId ?? o.referrerId,
+              involvementTier: payload.involvementTier ?? o.involvementTier,
+              notes: payload.notes ?? o.notes,
+              owners: {
+                ...o.owners,
+                estimatorId: payload.estimatorId || o.owners.estimatorId,
+                salespersonId: payload.salespersonId || o.owners.salespersonId,
+              },
+            }
+            const gate = gateStatus({ ...next, stage: 1 })
+            if (o.stage === 1 && gate.canAdvance) {
+              advanced = true
+              return {
+                ...next,
+                stage: 2,
+                slaStartedAt: nowIso(),
+                slaDueAt: addDays(nowIso(), unit.slaDays[2] || 5),
+                audit: [
+                  { id: uid('aud'), at: nowIso(), actorId: user?.id, action: 'Advanced stage', detail: 'Moved to estimation' },
+                  ...(o.audit || []),
+                ],
+              }
+            }
+            return next
+          },
+          'Updated lead pack',
+          payload.customer?.legalName || '',
+        )
+        if (payload.estimatorId) {
+          const opp = store.opportunities.find((o) => o.id === id)
+          notify(payload.estimatorId, 'Lead assigned', `${opp?.number || 'Lead'} is waiting for estimation.`, id)
+        }
+        return { ok: true, advanced }
       },
 
       updateOpportunity(id, fields, action, detail) {
@@ -263,11 +363,13 @@ export function AppProvider({ children }) {
         patchOpp(
           id,
           (o) => {
-            const estimates = o.estimates.map((e, i, arr) => {
-              const latest = arr.reduce((a, b) => (a.version > b.version ? a : b))
-              return e.id === latest.id ? { ...e, issued: true, issuedAt: nowIso() } : e
-            })
-            return { ...o, estimates }
+            const list = o.estimates || []
+            if (!list.length) return o
+            const latest = list.reduce((a, b) => (a.version > b.version ? a : b))
+            return {
+              ...o,
+              estimates: list.map((e) => (e.id === latest.id ? { ...e, issued: true, issuedAt: nowIso() } : e)),
+            }
           },
           'Issued estimate',
           'Estimation pack sent to sales',
@@ -276,47 +378,55 @@ export function AppProvider({ children }) {
         notify(opp?.owners.salespersonId, 'Estimate ready', `${opp?.number} is ready for proposal.`, id)
       },
 
-      generateProposal(id) {
+      saveAndIssueEstimate(id, options) {
+        const priced = (options || []).some((opt) => Number(opt.priceEx) > 0)
+        if (!priced) return { ok: false, error: 'Enter a price greater than 0 on at least one option.' }
+        const currentOpp = store.opportunities.find((o) => o.id === id)
+        const variation = (currentOpp?.variations || [])[0]
+        const variationAdvanced = !!(currentOpp?.variationPending && variation?.status === 're-estimate')
         patchOpp(
           id,
           (o) => {
-            const option = selectedOption(o)
-            const version = (o.proposals?.length || 0) + 1
-            const proposal = {
-              id: uid('prop'),
-              number: `${o.number.replace('PRS-26', 'PRS-P')}-v${version}`,
+            const current = [...(o.estimates || [])].sort((a, b) => b.version - a.version)[0]
+            const version = current && !current.issued ? current.version : (current?.version || 0) + 1
+            const estimate = {
+              id: current && !current.issued ? current.id : uid('est'),
               version,
-              estimateVersion: [...o.estimates].sort((a, b) => b.version - a.version)[0]?.version,
-              status: 'draft',
-              priceEx: option?.priceEx,
-              margin: option?.margin,
-              issuedAt: null,
-              presentedAt: null,
-              directorApproval: null,
-              acceptedAt: null,
-              signedDocName: '',
+              issued: true,
+              issuedAt: nowIso(),
+              options: options.map((opt) => ({
+                ...opt,
+                id: opt.id || uid('opt'),
+                margin: calcMargin(opt.priceEx, opt.costEx),
+              })),
             }
+            const rest = (o.estimates || []).filter((e) => e.id !== estimate.id)
+            const selected = estimate.options.find((x) => x.selected) || estimate.options[0]
+            const closeReestimate = o.variationPending && (o.variations || [])[0]?.status === 're-estimate'
             return {
               ...o,
-              proposals: [...(o.proposals || []), proposal],
-              documents: [
-                {
-                  id: uid('doc'),
-                  type: 'proposal',
-                  name: `${proposal.number}.pdf`,
-                  version,
-                  uploadedAt: nowIso(),
-                  uploaderId: user.id,
-                  size: 'generated',
-                  mirrorStatus: 'pending',
-                },
-                ...(o.documents || []),
-              ],
+              estimates: [...rest, estimate],
+              acceptedValue: selected?.priceEx || o.acceptedValue,
+              variations: closeReestimate
+                ? o.variations.map((v, i) => (i === 0 ? { ...v, status: 'priced' } : v))
+                : o.variations,
             }
           },
-          'Generated proposal',
-          'New proposal version created',
+          variationAdvanced ? 'Variation re-estimated' : 'Issued estimate',
+          variationAdvanced ? 'Issued revised pack to sales' : 'Estimation pack sent to sales',
         )
+        notify(
+          currentOpp?.owners.salespersonId,
+          variationAdvanced ? 'Variation re-priced' : 'Estimate ready',
+          `${currentOpp?.number} is ready for ${variationAdvanced ? 'the customer' : 'proposal'}.`,
+          id,
+        )
+        if (variationAdvanced) addProposalVersion(id, 'Variation proposal created')
+        return { ok: true, variationAdvanced }
+      },
+
+      generateProposal(id) {
+        addProposalVersion(id)
       },
 
       presentProposal(id) {
@@ -324,9 +434,15 @@ export function AppProvider({ children }) {
           id,
           (o) => {
             const p = currentProposal(o)
+            if (!p) return o
+            const variation = (o.variations || [])[0]
+            const closePresent = o.variationPending && variation?.status === 'priced'
             return {
               ...o,
               proposals: o.proposals.map((x) => (x.id === p.id ? { ...x, presentedAt: nowIso(), status: 'presented' } : x)),
+              variations: closePresent
+                ? o.variations.map((v, i) => (i === 0 ? { ...v, status: 'presented' } : v))
+                : o.variations,
             }
           },
           'Presented proposal',
@@ -504,6 +620,37 @@ export function AppProvider({ children }) {
         )
         const opp = store.opportunities.find((o) => o.id === id)
         notify(opp?.owners.estimatorId, 'Variation needs re-estimate', `${opp?.number}: ${reason}`, id)
+      },
+
+      progressVariation(id, status) {
+        patchOpp(
+          id,
+          (o) => {
+            const current = (o.variations || [])[0]
+            if (!current) return o
+            const variations = o.variations.map((v, i) => (i === 0 ? { ...v, status } : v))
+            const done = status === 'accepted'
+            return {
+              ...o,
+              variationPending: done ? false : true,
+              variations,
+            }
+          },
+          status === 'priced'
+            ? 'Variation re-estimated'
+            : status === 'presented'
+              ? 'Presented variation'
+              : 'Customer accepted variation',
+          status,
+        )
+        const opp = store.opportunities.find((o) => o.id === id)
+        if (status === 'priced') {
+          addProposalVersion(id, 'Variation proposal created')
+          notify(opp?.owners.salespersonId, 'Variation re-priced', `${opp?.number} is ready to present to the customer.`, id)
+        }
+        if (status === 'presented') {
+          notify(opp?.owners.salespersonId, 'Variation presented', `${opp?.number} is waiting for customer acceptance.`, id)
+        }
       },
 
       updateApproval(id, approvalId, fields) {
@@ -730,10 +877,21 @@ export function AppProvider({ children }) {
           return {
             ...prev,
             users: exists
-              ? prev.users.map((u) => (u.id === nextUser.id ? { ...u, ...nextUser } : u))
+              ? prev.users.map((u) => {
+                  if (u.id !== nextUser.id) return u
+                  const password = String(nextUser.password || '').trim()
+                  return { ...u, ...nextUser, password: password || u.password }
+                })
               : [...prev.users, { ...nextUser, id: nextUser.id || uid('u'), password: nextUser.password || 'Prestige1' }],
           }
         })
+      },
+
+      deleteUser(id) {
+        setStore((prev) => ({
+          ...prev,
+          users: prev.users.filter((u) => u.id !== id),
+        }))
       },
 
       saveReferrer(next) {

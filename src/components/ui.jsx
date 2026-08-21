@@ -48,19 +48,20 @@ export function Empty({ title, body, action }) {
   )
 }
 
-export function Field({ label, hint, children, className = '' }) {
+export function Field({ label, hint, error, children, className = '' }) {
   return (
-    <div className={`field ${className}`}>
+    <div className={`field ${className} ${error ? 'invalid' : ''}`.trim()}>
       {label ? <label>{label}{hint ? <span className="hint"> · {hint}</span> : null}</label> : null}
       {children}
+      {error ? <span className="field-error">{error}</span> : null}
     </div>
   )
 }
 
-export function Modal({ title, body, children, onClose, actions }) {
+export function Modal({ title, body, children, onClose, actions, className = '' }) {
   return (
     <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={`modal ${className}`.trim()} onClick={(e) => e.stopPropagation()}>
         <h2>{title}</h2>
         {body ? <p className="lede">{body}</p> : null}
         {children}
