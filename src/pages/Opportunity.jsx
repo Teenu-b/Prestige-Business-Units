@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import StageStepper from '../components/StageStepper'
+import LeadForm, { estimatorChoices, formFromOpportunity, payloadFromLeadForm, validateLeadForm } from '../components/LeadForm'
 import { Badge, Field, Modal } from '../components/ui'
 import {
   LIFECYCLE,
@@ -26,11 +27,13 @@ import {
   calcMargin,
   commissionFor,
   currentProposal,
+  currentVariation,
   gateStatus,
   incGst,
-  missingLeadFields,
   selectedOption,
   stageMeta,
+  VARIATION_STEPS,
+  variationNextStep,
 } from '../lib/workflow'
 
 export default function Opportunity() {
@@ -39,6 +42,20 @@ export default function Opportunity() {
   const opp = app.opportunities.find((o) => o.id === id) || app.allOpportunities.find((o) => o.id === id)
   const [tab, setTab] = useState('work')
   const [gateError, setGateError] = useState(null)
+  const [viewStage, setViewStage] = useState(opp?.stage || 1)
+  const workRef = useRef(null)
+
+  useEffect(() => {
+    setViewStage(opp?.stage || 1)
+  }, [opp?.id])
+
+  const showStage = (stageId) => {
+    setTab('work')
+    setViewStage(stageId)
+    window.setTimeout(() => {
+      workRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+  }
 
   if (!opp) {
     return (
@@ -58,7 +75,10 @@ export default function Opportunity() {
   const advance = () => {
     const result = app.advanceStage(opp.id)
     if (!result.ok) setGateError(result.missing)
-    else setGateError(null)
+    else {
+      setGateError(null)
+      setViewStage(Math.min(9, opp.stage + 1))
+    }
   }
 
   return (
@@ -78,7 +98,7 @@ export default function Opportunity() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {canAdvance(app.user, opp) && opp.stage < 9 && opp.lifecycle === 'Active' ? (
+          {canAdvance(app.user, opp) && opp.stage < 9 && opp.stage !== 1 && opp.lifecycle === 'Active' ? (
             <button className="btn btn-primary" onClick={advance} disabled={!gate.canAdvance}>
               Advance to {stageMeta(Math.min(9, opp.stage + 1)).short}
             </button>
@@ -86,20 +106,41 @@ export default function Opportunity() {
         </div>
       </div>
 
-      <StageStepper stage={opp.stage} />
+      <StageStepper stage={opp.stage} viewStage={viewStage} onSelect={showStage} />
+
+      {viewStage !== opp.stage ? (
+        <div className="alert info" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span>Viewing {stageMeta(viewStage).label}. Current stage is {stageMeta(opp.stage).label}.</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => showStage(opp.stage)}>Back to current stage</button>
+        </div>
+      ) : null}
 
       {gateError ? <div className="alert warning">Still needed: {gateError.join(', ')}</div> : null}
-      {!gate.canAdvance && opp.lifecycle === 'Active' ? (
+      {opp.variationPending && opp.stage >= 5 ? (
+        <VariationGuide
+          opp={opp}
+          app={app}
+          onOpenEstimate={() => showStage(2)}
+          onOpenProposal={() => showStage(3)}
+          onProgress={(status) => {
+            if (status === 'priced') showStage(3)
+            if (status === 'presented') showStage(4)
+            if (status === 'accepted') showStage(opp.stage)
+          }}
+        />
+      ) : !gate.canAdvance && opp.lifecycle === 'Active' && opp.stage !== 1 ? (
         <div className="alert info">To leave {stageMeta(opp.stage).label}: {gate.missing.join(' · ')}</div>
       ) : null}
 
       <div className="tabs">
-        <button className={tab === 'work' ? 'active' : ''} onClick={() => setTab('work')}>Current stage</button>
-        <button className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>Documents</button>
-        <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>History</button>
+        <button type="button" className={tab === 'work' ? 'active' : ''} onClick={() => setTab('work')}>Stage work</button>
+        <button type="button" className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>Documents</button>
+        <button type="button" className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>History</button>
       </div>
 
-      {tab === 'work' ? <StagePanel opp={opp} app={app} userName={userName} /> : null}
+      <div ref={workRef}>
+        {tab === 'work' ? <StagePanel opp={opp} app={app} userName={userName} viewStage={viewStage} onIssued={(result) => { if (result?.variationAdvanced) showStage(3) }} /> : null}
+      </div>
       {tab === 'files' ? (
         <div className="card card-pad">
           {(opp.documents || []).length === 0 ? <p className="lede">No files yet.</p> : (
@@ -136,7 +177,7 @@ export default function Opportunity() {
   )
 }
 
-function StagePanel({ opp, app, userName }) {
+function StagePanel({ opp, app, userName, viewStage, onIssued }) {
   const panels = {
     1: LeadPanel,
     2: EstimatePanel,
@@ -148,78 +189,103 @@ function StagePanel({ opp, app, userName }) {
     8: BillingPanel,
     9: HandoverPanel,
   }
-  const Cmp = panels[opp.stage] || LeadPanel
+  const Cmp = panels[viewStage] || LeadPanel
   return (
     <div className="panel">
-      <Cmp opp={opp} app={app} userName={userName} />
+      <Cmp key={viewStage} opp={opp} app={app} userName={userName} onIssued={onIssued} />
     </div>
   )
 }
 
 function LeadPanel({ opp, app }) {
-  const missing = missingLeadFields(opp)
-  const estimators = app.users.filter((u) => u.roles.includes('EST') && u.unitIds.includes(app.unit.id))
-  const [pack, setPack] = useState({
-    contactName: opp.contact?.name || '',
-    contactEmail: opp.contact?.email || '',
-    line1: opp.site?.line1 || '',
-    suburb: opp.site?.suburb || '',
-    state: opp.site?.state || 'NSW',
-    postcode: opp.site?.postcode || '',
-    annualKwh: opp.energy?.annualKwh || '',
-    hasBills: Boolean(opp.energy?.hasBills),
-    estimatorId: opp.owners?.estimatorId || '',
+  const estimators = estimatorChoices(app.users, app.unit.id)
+  const sales = app.users.filter((u) => (u.roles.includes('SLS') || u.roles.includes('SS')) && u.unitIds.includes(app.unit.id))
+  const [form, setForm] = useState(() => {
+    const base = formFromOpportunity(opp)
+    if (!base.estimatorId && estimators[0]) base.estimatorId = estimators[0].id
+    return base
   })
+  const [errors, setErrors] = useState({})
+  const set = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }))
+    setErrors((prev) => {
+      if (!prev[k]) return prev
+      const next = { ...prev }
+      delete next[k]
+      return next
+    })
+  }
+
+  const defaultEstimatorId = estimators[0]?.id
+  useEffect(() => {
+    const next = formFromOpportunity(opp)
+    if (!next.estimatorId && defaultEstimatorId) next.estimatorId = defaultEstimatorId
+    setForm(next)
+  }, [opp.id])
+
+  useEffect(() => {
+    if (!form.estimatorId && defaultEstimatorId) setForm((f) => ({ ...f, estimatorId: defaultEstimatorId }))
+  }, [defaultEstimatorId, form.estimatorId])
 
   const savePack = () => {
-    app.updateOpportunity(opp.id, {
-      contact: { ...opp.contact, name: pack.contactName, email: pack.contactEmail },
-      site: { ...opp.site, line1: pack.line1, suburb: pack.suburb, state: pack.state, postcode: pack.postcode },
-      energy: { ...opp.energy, annualKwh: pack.annualKwh ? Number(pack.annualKwh) || pack.annualKwh : '', hasBills: pack.hasBills },
-    }, 'Updated lead pack')
-    if (pack.estimatorId) app.assignEstimator(opp.id, pack.estimatorId)
+    const nextErrors = validateLeadForm(form)
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors)
+      app.saveLeadPack(opp.id, payloadFromLeadForm(form))
+      return
+    }
+    app.saveLeadPack(opp.id, payloadFromLeadForm(form))
+    setErrors({})
   }
+
+  const errorList = Object.values(errors)
 
   return (
     <div className="card card-pad">
       <h2>Lead pack</h2>
-      <p className="sub">Qualification needs site street and suburb, a decision-maker, energy usage or bills, and an estimator.</p>
-      <div className="form-grid">
-        <Field label="Site street" hint="required to advance"><input value={pack.line1} onChange={(e) => setPack({ ...pack, line1: e.target.value })} /></Field>
-        <Field label="Suburb" hint="required to advance"><input value={pack.suburb} onChange={(e) => setPack({ ...pack, suburb: e.target.value })} /></Field>
-        <Field label="State"><input value={pack.state} onChange={(e) => setPack({ ...pack, state: e.target.value })} /></Field>
-        <Field label="Postcode"><input value={pack.postcode} onChange={(e) => setPack({ ...pack, postcode: e.target.value })} /></Field>
-        <Field label="Decision-maker"><input value={pack.contactName} onChange={(e) => setPack({ ...pack, contactName: e.target.value })} /></Field>
-        <Field label="Email"><input value={pack.contactEmail} onChange={(e) => setPack({ ...pack, contactEmail: e.target.value })} /></Field>
-        <Field label="Annual kWh"><input value={pack.annualKwh} onChange={(e) => setPack({ ...pack, annualKwh: e.target.value })} /></Field>
-        <Field label="Bills">
-          <label className="check">
-            <input type="checkbox" checked={pack.hasBills} onChange={(e) => setPack({ ...pack, hasBills: e.target.checked })} />
-            Bills on file
-          </label>
-        </Field>
-        <Field label="Estimator">
-          <select value={pack.estimatorId} onChange={(e) => setPack({ ...pack, estimatorId: e.target.value })}>
-            <option value="">Unassigned</option>
-            {estimators.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
-        </Field>
-      </div>
-      {missing.length ? <div className="alert warning" style={{ marginTop: 16 }}>Missing: {missing.join(', ')}</div> : <div className="alert success" style={{ marginTop: 16 }}>Minimum data is complete.</div>}
+      <p className="sub">
+        {opp.stage === 1
+          ? 'Fill every required field, then save. A complete lead moves to estimation. You can return here from the stepper later.'
+          : 'This lead has already moved on. You can still review and update the details.'}
+      </p>
+      <LeadForm
+        form={form}
+        set={set}
+        errors={errors}
+        estimators={estimators}
+        sales={sales}
+        referrers={app.referrers}
+        user={app.user}
+      />
+      {errorList.length ? (
+        <div className="alert danger" style={{ marginTop: 16 }}>
+          Fix {errorList.length} {errorList.length === 1 ? 'field' : 'fields'} before this lead can move to estimation.
+          <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
+            {[...new Set(errorList)].map((msg) => <li key={msg}>{msg}</li>)}
+          </ul>
+        </div>
+      ) : opp.stage === 1 ? (
+        <div className="alert info" style={{ marginTop: 16 }}>Required fields must be complete to leave Lead.</div>
+      ) : null}
       <div style={{ marginTop: 16 }}>
-        <button className="btn btn-primary" onClick={savePack}>Save lead pack</button>
+        <button className="btn btn-primary" onClick={savePack}>
+          {opp.stage === 1 ? 'Save and continue to estimation' : 'Save lead details'}
+        </button>
       </div>
     </div>
   )
 }
 
-function EstimatePanel({ opp, app }) {
+function EstimatePanel({ opp, app, onIssued }) {
   const latest = [...(opp.estimates || [])].sort((a, b) => b.version - a.version)[0]
   const [options, setOptions] = useState(latest?.options?.length ? latest.options : [blankOption(true)])
+  const [error, setError] = useState('')
   const canEdit = canEditEstimate(app.user)
   const showCost = canSeeCost(app.user)
+  const variationReprice = opp.variationPending && (opp.variations || [])[0]?.status === 're-estimate'
 
   const update = (i, k, v) => {
+    setError('')
     setOptions((opts) => opts.map((o, idx) => {
       if (idx !== i) return k === 'selected' ? { ...o, selected: false } : o
       const next = { ...o, [k]: k === 'selected' ? true : v }
@@ -228,10 +294,24 @@ function EstimatePanel({ opp, app }) {
     }))
   }
 
+  const issue = () => {
+    const result = app.saveAndIssueEstimate(opp.id, options)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError('')
+    onIssued?.(result)
+  }
+
   return (
     <div className="card card-pad">
       <h2>Solution options</h2>
-      <p className="sub">Summary cost, price, margin and payback only. Detailed cost build-up is Phase 2.</p>
+      <p className="sub">
+        {variationReprice
+          ? 'Update cost and price for the variation, then issue the revised pack to sales.'
+          : 'Summary cost, price, margin and payback only. Detailed cost build-up is Phase 2.'}
+      </p>
       {options.map((opt, i) => (
         <div key={opt.id} className={`option-card ${opt.selected ? 'selected' : ''}`}>
           <label className="check"><input type="radio" checked={opt.selected} onChange={() => update(i, 'selected', true)} disabled={!canEdit} /> Recommended option</label>
@@ -254,13 +334,16 @@ function EstimatePanel({ opp, app }) {
           </div>
         </div>
       ))}
+      {error ? <div className="alert danger">{error}</div> : null}
       {canEdit ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-ghost" type="button" onClick={() => setOptions((o) => [...o, blankOption(false)])}>Add option</button>
           <button className="btn btn-ghost" type="button" onClick={() => app.saveEstimate(opp.id, options)}>Save pack</button>
-          <button className="btn btn-primary" type="button" onClick={() => { app.saveEstimate(opp.id, options); app.issueEstimate(opp.id) }}>Issue to sales</button>
+          <button className="btn btn-primary" type="button" onClick={issue}>
+            {variationReprice ? 'Issue revised estimate to sales' : 'Issue to sales'}
+          </button>
         </div>
-      ) : <p className="lede">Cost and margin are hidden from your role.</p>}
+      ) : <p className="lede">Cost and margin are hidden from your role. Sign in as the estimator to issue this pack.</p>}
     </div>
   )
 }
@@ -274,11 +357,16 @@ function ProposalPanel({ opp, app }) {
   const option = selectedOption(opp)
   const [feedback, setFeedback] = useState(opp.feedback || '')
   const canIssue = canIssueProposal(app.user)
+  const variationPresent = opp.variationPending && (opp.variations || [])[0]?.status === 'priced'
 
   return (
     <div className="card card-pad">
       <h2>Proposal & engagement</h2>
-      <p className="sub">Generate from the selected option, present it, then capture what the customer said.</p>
+      <p className="sub">
+        {variationPresent
+          ? 'A revised proposal was created from the variation price. Present it to the customer, then mark it presented.'
+          : 'Generate from the selected option, present it, then capture what the customer said.'}
+      </p>
       {option ? (
         <p>Selected: <b>{option.name || 'Option'}</b> · {money(option.priceEx)} ex GST · {money(incGst(option.priceEx))} inc GST</p>
       ) : <div className="alert warning">No estimate option selected.</div>}
@@ -345,6 +433,102 @@ function ClosurePanel({ opp, app }) {
   )
 }
 
+function VariationGuide({ opp, app, onOpenEstimate, onOpenProposal, onProgress }) {
+  const variation = currentVariation(opp)
+  const next = variationNextStep(opp)
+  const canPrice = canEditEstimate(app.user)
+  const canSales = canIssueProposal(app.user)
+  const estimatorName = app.users.find((u) => u.id === opp.owners?.estimatorId)?.name || 'the estimator'
+  const salesName = app.users.find((u) => u.id === opp.owners?.salespersonId)?.name || 'sales'
+
+  return (
+    <div className="alert warning" style={{ marginBottom: 16 }}>
+      <strong>Cannot leave {stageMeta(opp.stage).label} — a variation is pending.</strong>
+      <p className="lede" style={{ margin: '8px 0 12px', color: 'inherit' }}>
+        Scope changed after acceptance{variation?.reason ? `: “${variation.reason}”` : ''}. Finish these three steps, in order. Delivery is frozen until the customer accepts the new price.
+      </p>
+      <div className="list-stack">
+        {VARIATION_STEPS.map((step) => {
+          const status = variation?.status || 're-estimate'
+          const done = (step.key === 're-estimate' && ['priced', 'presented', 'accepted'].includes(status))
+            || (step.key === 'presented' && ['presented', 'accepted'].includes(status))
+            || (step.key === 'accepted' && status === 'accepted')
+          const current = next?.key === step.key
+          return (
+            <div key={step.key} className="list-item" style={{ borderColor: current ? 'var(--gold)' : undefined }}>
+              <div>
+                <div className="row-title">{step.title}{current ? ' · do this now' : ''}</div>
+                <div className="row-meta">{step.detail} Owner: {step.owner}.</div>
+              </div>
+              <Badge tone={done ? 'success' : current ? 'warning' : 'neutral'}>{done ? 'Done' : current ? 'Next' : 'Waiting'}</Badge>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        {next?.key === 're-estimate' ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onOpenEstimate()
+              }}
+            >
+              Open estimation
+            </button>
+            {canPrice ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  app.progressVariation(opp.id, 'priced')
+                  onProgress?.('priced')
+                }}
+              >
+                Mark re-estimate complete
+              </button>
+            ) : <span className="row-meta">Sign in as {estimatorName} to complete the re-estimate.</span>}
+          </>
+        ) : null}
+        {next?.key === 'presented' ? (
+          <>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onOpenProposal}>
+              Open proposal
+            </button>
+            {canSales ? (
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  if (currentProposal(opp)) app.presentProposal(opp.id)
+                  else app.progressVariation(opp.id, 'presented')
+                  onProgress?.('presented')
+                }}
+              >
+                Mark presented to customer
+              </button>
+            ) : <span className="row-meta">Sign in as {salesName} to present the variation.</span>}
+          </>
+        ) : null}
+        {next?.key === 'accepted' ? (
+          canSales ? (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                app.progressVariation(opp.id, 'accepted')
+                onProgress?.('accepted')
+              }}
+            >
+              Record customer acceptance
+            </button>
+          ) : <span className="row-meta">Sign in as {salesName} to record acceptance.</span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function ApprovalsPanel({ opp, app }) {
   const can = canManageApprovals(app.user)
   return (
@@ -377,6 +561,9 @@ function VariationBox({ opp, app }) {
   const [reason, setReason] = useState('')
   const [open, setOpen] = useState(false)
   if (opp.stage < 4) return null
+  if (opp.variationPending) {
+    return <p className="lede">A variation is already open. Complete the three steps above before raising another.</p>
+  }
   return (
     <>
       <button className="btn btn-ghost" onClick={() => setOpen(true)}>Raise variation</button>

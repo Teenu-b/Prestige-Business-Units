@@ -72,7 +72,11 @@ export function gateStatus(opp) {
     return { canAdvance: false, missing: ['Opportunity is not active'], reason: opp.lifecycle }
   }
   if (opp.variationPending && opp.stage >= 5) {
-    return { canAdvance: false, missing: ['A variation is pending acceptance'] }
+    return {
+      canAdvance: false,
+      missing: ['A variation is pending acceptance'],
+      variation: true,
+    }
   }
 
   switch (opp.stage) {
@@ -197,4 +201,38 @@ export function nextNumber(opportunities, unitCode) {
     .map((o) => Number(o.number.replace(prefix, '')))
   const max = nums.length ? Math.max(...nums) : 0
   return `${prefix}${String(max + 1).padStart(4, '0')}`
+}
+
+export const VARIATION_STEPS = [
+  {
+    key: 're-estimate',
+    title: '1. Re-estimate',
+    detail: 'Estimator updates cost and price for the new scope, then issues the revised pack to sales.',
+    owner: 'Estimator',
+  },
+  {
+    key: 'presented',
+    title: '2. Present to customer',
+    detail: 'Sales opens Proposal, shows the revised price, and marks it presented.',
+    owner: 'Sales',
+  },
+  {
+    key: 'accepted',
+    title: '3. Record acceptance',
+    detail: 'When the customer accepts the variation, Approvals can continue.',
+    owner: 'Sales',
+  },
+]
+
+export function currentVariation(opp) {
+  return (opp.variations || [])[0] || null
+}
+
+export function variationNextStep(opp) {
+  const v = currentVariation(opp)
+  if (!opp.variationPending || !v) return null
+  if (v.status === 're-estimate') return VARIATION_STEPS[0]
+  if (v.status === 'presented') return VARIATION_STEPS[2]
+  if (v.status === 'priced') return VARIATION_STEPS[1]
+  return VARIATION_STEPS[0]
 }
