@@ -38,12 +38,15 @@ export function navFor(user) {
     return [
       { to: '/', label: 'Home' },
       { to: '/pipeline', label: 'My leads' },
+     
     ]
   }
 
   const items = [
     { to: '/', label: 'Home' },
     { to: '/pipeline', label: 'Pipeline' },
+  
+  
   ]
 
   if (hasRole(user, 'BOP', 'SOM', 'CC', 'DIR', 'ADM', 'SS')) {
@@ -52,9 +55,16 @@ export function navFor(user) {
   if (hasRole(user, 'BOP', 'SOM', 'ACC', 'DIR', 'ADM')) {
     items.push({ to: '/procurement', label: 'Materials' })
   }
+  if (hasRole(user, 'EST', 'SLS', 'SS', 'DIR', 'ADM')) {
+    items.push({ to: '/quotes', label: 'Quotes' })
+  }
+  if (hasRole(user, 'EST', 'SLS', 'SS', 'DIR', 'ADM')) {
+    items.push({ to: '/costs', label: 'Costs' })
+  }
   if (hasRole(user, 'ACC', 'DIR', 'ADM', 'SOM')) {
     items.push({ to: '/billing', label: 'Billing' })
   }
+
   if (!hasRole(user, 'REF')) {
     items.push({ to: '/referrers', label: 'Referrers' })
   }

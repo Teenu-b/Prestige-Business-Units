@@ -18,8 +18,8 @@ export const STAGES = [
   { id: 3, key: 'proposal', label: 'Proposal', short: 'Proposal' },
   { id: 4, key: 'closure', label: 'Sales closure', short: 'Closure' },
   { id: 5, key: 'approvals', label: 'Approvals', short: 'Approvals' },
-  { id: 6, key: 'procurement', label: 'Procurement', short: 'Procure' },
-  { id: 7, key: 'site', label: 'Site works', short: 'Site' },
+  { id: 6, key: 'procurement', label: 'Procurement', short: 'Procurement' },
+  { id: 7, key: 'site', label: 'Site works', short: 'Site Works' },
   { id: 8, key: 'billing', label: 'Billing', short: 'Billing' },
   { id: 9, key: 'handover', label: 'Handover', short: 'Close' },
 ]
