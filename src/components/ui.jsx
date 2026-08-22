@@ -48,6 +48,31 @@ export function Empty({ title, body, action }) {
   )
 }
 
+export function NumberInput({ value, onChange, disabled, step, min }) {
+  const empty = value === '' || value === null || value === undefined || value === 0 || value === '0'
+  return (
+    <input
+      type="number"
+      inputMode="decimal"
+      step={step}
+      min={min}
+      disabled={disabled}
+      placeholder="0"
+      value={empty ? '' : value}
+      onChange={(e) => {
+        let raw = e.target.value
+        if (raw === '') {
+          onChange('')
+          return
+        }
+        if (/^0\d+/.test(raw)) raw = String(Number(raw))
+        const n = Number(raw)
+        onChange(Number.isNaN(n) ? '' : n)
+      }}
+    />
+  )
+}
+
 export function Field({ label, hint, error, children, className = '' }) {
   return (
     <div className={`field ${className} ${error ? 'invalid' : ''}`.trim()}>

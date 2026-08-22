@@ -384,6 +384,7 @@ export function AppProvider({ children }) {
         const currentOpp = store.opportunities.find((o) => o.id === id)
         const variation = (currentOpp?.variations || [])[0]
         const variationAdvanced = !!(currentOpp?.variationPending && variation?.status === 're-estimate')
+        const goToProposal = variationAdvanced || currentOpp?.stage === 2
         patchOpp(
           id,
           (o) => {
@@ -394,23 +395,38 @@ export function AppProvider({ children }) {
               version,
               issued: true,
               issuedAt: nowIso(),
-              options: options.map((opt) => ({
+              options: (options || []).map((opt) => ({
                 ...opt,
                 id: opt.id || uid('opt'),
+                capacityKw: Number(opt.capacityKw) || 0,
+                capacityKwh: Number(opt.capacityKwh) || 0,
+                costEx: Number(opt.costEx) || 0,
+                priceEx: Number(opt.priceEx) || 0,
+                annualSaving: Number(opt.annualSaving) || 0,
+                paybackYears: Number(opt.paybackYears) || 0,
                 margin: calcMargin(opt.priceEx, opt.costEx),
               })),
             }
             const rest = (o.estimates || []).filter((e) => e.id !== estimate.id)
             const selected = estimate.options.find((x) => x.selected) || estimate.options[0]
             const closeReestimate = o.variationPending && (o.variations || [])[0]?.status === 're-estimate'
-            return {
+            const next = {
               ...o,
               estimates: [...rest, estimate],
-              acceptedValue: selected?.priceEx || o.acceptedValue,
+              acceptedValue: Number(selected?.priceEx) || o.acceptedValue,
               variations: closeReestimate
                 ? o.variations.map((v, i) => (i === 0 ? { ...v, status: 'priced' } : v))
                 : o.variations,
             }
+            if (o.stage === 2) {
+              return {
+                ...next,
+                stage: 3,
+                slaStartedAt: nowIso(),
+                slaDueAt: addDays(nowIso(), unit?.slaDays?.[3] || 7),
+              }
+            }
+            return next
           },
           variationAdvanced ? 'Variation re-estimated' : 'Issued estimate',
           variationAdvanced ? 'Issued revised pack to sales' : 'Estimation pack sent to sales',
@@ -418,11 +434,11 @@ export function AppProvider({ children }) {
         notify(
           currentOpp?.owners.salespersonId,
           variationAdvanced ? 'Variation re-priced' : 'Estimate ready',
-          `${currentOpp?.number} is ready for ${variationAdvanced ? 'the customer' : 'proposal'}.`,
+          `${currentOpp?.number || 'Opportunity'} is ready for proposal.`,
           id,
         )
-        if (variationAdvanced) addProposalVersion(id, 'Variation proposal created')
-        return { ok: true, variationAdvanced }
+        if (goToProposal) addProposalVersion(id, variationAdvanced ? 'Variation proposal created' : 'Proposal created from issued estimate')
+        return { ok: true, variationAdvanced, goToProposal }
       },
 
       generateProposal(id) {

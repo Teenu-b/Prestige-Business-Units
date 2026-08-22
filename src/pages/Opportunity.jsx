@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import StageStepper from '../components/StageStepper'
 import LeadForm, { estimatorChoices, formFromOpportunity, payloadFromLeadForm, validateLeadForm } from '../components/LeadForm'
-import { Badge, Field, Modal } from '../components/ui'
+import { Badge, Field, Modal, NumberInput } from '../components/ui'
 import {
   LIFECYCLE,
   PRODUCT_RANGES,
@@ -139,7 +139,7 @@ export default function Opportunity() {
       </div>
 
       <div ref={workRef}>
-        {tab === 'work' ? <StagePanel opp={opp} app={app} userName={userName} viewStage={viewStage} onIssued={(result) => { if (result?.variationAdvanced) showStage(3) }} /> : null}
+        {tab === 'work' ? <StagePanel opp={opp} app={app} userName={userName} viewStage={viewStage} onIssued={(result) => { if (result?.ok) showStage(3) }} /> : null}
       </div>
       {tab === 'files' ? (
         <div className="card card-pad">
@@ -295,9 +295,13 @@ function EstimatePanel({ opp, app, onIssued }) {
   }
 
   const issue = () => {
+    if (!app.saveAndIssueEstimate) {
+      setError('Issue to sales is not available. Refresh the page and try again.')
+      return
+    }
     const result = app.saveAndIssueEstimate(opp.id, options)
-    if (!result.ok) {
-      setError(result.error)
+    if (!result?.ok) {
+      setError(result?.error || 'Enter a price greater than 0 on at least one option.')
       return
     }
     setError('')
@@ -310,8 +314,9 @@ function EstimatePanel({ opp, app, onIssued }) {
       <p className="sub">
         {variationReprice
           ? 'Update cost and price for the variation, then issue the revised pack to sales.'
-          : 'Summary cost, price, margin and payback only. Detailed cost build-up is Phase 2.'}
+          : 'Enter a price on the recommended option, then issue to sales. That creates the proposal and moves the job to Proposal.'}
       </p>
+      {error ? <div className="alert danger">{error}</div> : null}
       {options.map((opt, i) => (
         <div key={opt.id} className={`option-card ${opt.selected ? 'selected' : ''}`}>
           <label className="check"><input type="radio" checked={opt.selected} onChange={() => update(i, 'selected', true)} disabled={!canEdit} /> Recommended option</label>
@@ -322,19 +327,18 @@ function EstimatePanel({ opp, app, onIssued }) {
                 {PRODUCT_RANGES.map((p) => <option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Capacity kW"><input type="number" value={opt.capacityKw} disabled={!canEdit} onChange={(e) => update(i, 'capacityKw', Number(e.target.value))} /></Field>
-            <Field label="Storage kWh"><input type="number" value={opt.capacityKwh} disabled={!canEdit} onChange={(e) => update(i, 'capacityKwh', Number(e.target.value))} /></Field>
+            <Field label="Capacity kW"><NumberInput value={opt.capacityKw} disabled={!canEdit} onChange={(v) => update(i, 'capacityKw', v)} /></Field>
+            <Field label="Storage kWh"><NumberInput value={opt.capacityKwh} disabled={!canEdit} onChange={(v) => update(i, 'capacityKwh', v)} /></Field>
             {showCost ? (
-              <Field label="Cost (ex GST)"><input type="number" value={opt.costEx} disabled={!canEdit} onChange={(e) => update(i, 'costEx', Number(e.target.value))} /></Field>
+              <Field label="Cost (ex GST)"><NumberInput value={opt.costEx} disabled={!canEdit} onChange={(v) => update(i, 'costEx', v)} /></Field>
             ) : null}
-            <Field label="Price (ex GST)"><input type="number" value={opt.priceEx} disabled={!canEdit} onChange={(e) => update(i, 'priceEx', Number(e.target.value))} /></Field>
+            <Field label="Price (ex GST)"><NumberInput value={opt.priceEx} disabled={!canEdit} onChange={(v) => update(i, 'priceEx', v)} /></Field>
             {showCost ? <Field label="Margin"><input value={pct(opt.margin)} readOnly /></Field> : null}
-            <Field label="Annual saving"><input type="number" value={opt.annualSaving} disabled={!canEdit} onChange={(e) => update(i, 'annualSaving', Number(e.target.value))} /></Field>
-            <Field label="Payback (years)"><input type="number" step="0.1" value={opt.paybackYears} disabled={!canEdit} onChange={(e) => update(i, 'paybackYears', Number(e.target.value))} /></Field>
+            <Field label="Annual saving"><NumberInput value={opt.annualSaving} disabled={!canEdit} onChange={(v) => update(i, 'annualSaving', v)} /></Field>
+            <Field label="Payback (years)"><NumberInput step="0.1" value={opt.paybackYears} disabled={!canEdit} onChange={(v) => update(i, 'paybackYears', v)} /></Field>
           </div>
         </div>
       ))}
-      {error ? <div className="alert danger">{error}</div> : null}
       {canEdit ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn btn-ghost" type="button" onClick={() => setOptions((o) => [...o, blankOption(false)])}>Add option</button>
@@ -349,7 +353,7 @@ function EstimatePanel({ opp, app, onIssued }) {
 }
 
 function blankOption(selected) {
-  return { id: uid('opt'), name: '', brand: PRODUCT_RANGES[0], product: '', capacityKw: 0, capacityKwh: 0, costEx: 0, priceEx: 0, margin: 0, annualSaving: 0, paybackYears: 0, selected }
+  return { id: uid('opt'), name: '', brand: PRODUCT_RANGES[0], product: '', capacityKw: '', capacityKwh: '', costEx: '', priceEx: '', margin: 0, annualSaving: '', paybackYears: '', selected }
 }
 
 function ProposalPanel({ opp, app }) {
