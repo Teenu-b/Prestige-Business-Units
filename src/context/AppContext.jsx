@@ -9,12 +9,14 @@ import {
   commissionFor,
   currentProposal,
   defaultApprovals,
+  defaultHandover,
   defaultSubstages,
   gateStatus,
   gstOn,
   missingLeadFields,
   nextNumber,
   selectedOption,
+  workStage,
 } from '../lib/workflow'
 
 const AppContext = createContext(null)
@@ -40,7 +42,11 @@ export function AppProvider({ children }) {
   })
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(store))
+    } catch {
+      /* quota — keep in-memory state */
+    }
   }, [store])
 
   useEffect(() => {
@@ -89,7 +95,7 @@ export function AppProvider({ children }) {
   }
 
   const value = useMemo(() => {
-    const unitOpps = store.opportunities.filter((o) => o.businessUnitId === unit?.id)
+    const unitOpps = (store.opportunities || []).filter((o) => o.businessUnitId === unit?.id)
     const visibleOpps = user ? unitOpps.filter((o) => canViewOpportunity(user, o)) : []
 
     const addProposalVersion = (id, detail = 'New proposal version created') => {
@@ -141,10 +147,11 @@ export function AppProvider({ children }) {
       unit,
       users: store.users,
       units: user ? store.units.filter((u) => user.unitIds.includes(u.id) || user.roles.includes('ADM')) : store.units,
-      referrers: store.referrers,
+      referrers: store.referrers || [],
+      campaigns: (store.campaigns || []).filter((c) => !unit || c.businessUnitId === unit.id),
       opportunities: visibleOpps,
       allOpportunities: unitOpps,
-      notifications: store.notifications.filter((n) => n.userId === user?.id),
+      notifications: (store.notifications || []).filter((n) => n.userId === user?.id),
 
       login(email, password) {
         const found = store.users.find(
@@ -193,7 +200,7 @@ export function AppProvider({ children }) {
           id,
           number,
           businessUnitId: unit.id,
-          stage: 1,
+          stage: 2,
           lifecycle: 'Active',
           variationPending: false,
           marginFloor: unit.marginFloor,
@@ -221,7 +228,7 @@ export function AppProvider({ children }) {
           createdAt,
           updatedAt: createdAt,
           slaStartedAt: createdAt,
-          slaDueAt: addDays(createdAt, unit.slaDays[1] || 3),
+          slaDueAt: addDays(createdAt, unit.slaDays[2] || 3),
           estimates: [],
           proposals: [],
           variations: [],
@@ -233,6 +240,7 @@ export function AppProvider({ children }) {
             electricalContractor: '',
             civilContractor: '',
             substages: defaultSubstages(),
+            handover: defaultHandover(),
           },
           billingRequests: [],
           rebates: [],
@@ -255,13 +263,27 @@ export function AppProvider({ children }) {
           notes: payload.notes || '',
           acceptedValue: 0,
           closure: null,
+          campaignId: payload.campaignId || '',
+          qualification: payload.qualification || 'nurture',
+          nextAction: payload.nextAction || '',
+          nextActionDue: payload.nextActionDue || '',
+          authority: payload.authority || '',
+          timing: payload.timing || '',
+          opportunityValue: payload.opportunityValue || '',
+          inspection: { photos: false, drawings: false, measurements: false, constraints: '' },
+          meetings: [],
+          jobBaseline: { budgetConfirmed: false, costCategories: false, keyDates: '', notes: '' },
+          service: { reviewRequested: false, referralCaptured: false, actions: '' },
+          operationalComplete: false,
+          financialComplete: false,
+          estimateReturn: null,
         }
-        const qualified = missingLeadFields(opp).length === 0 && opp.owners.estimatorId
+        const qualified = missingLeadFields(opp).length === 0 && opp.owners.estimatorId && opp.qualification === 'qualified'
         if (qualified) {
-          opp.stage = 2
-          opp.slaDueAt = addDays(createdAt, unit.slaDays[2] || 5)
+          opp.stage = 3
+          opp.slaDueAt = addDays(createdAt, unit.slaDays[3] || 7)
           opp.audit = [
-            { id: uid('aud'), at: createdAt, actorId: user.id, action: 'Advanced stage', detail: 'Moved to estimation' },
+            { id: uid('aud'), at: createdAt, actorId: user.id, action: 'Advanced stage', detail: 'Moved to engagement / inspection' },
             ...opp.audit,
           ]
         }
@@ -287,22 +309,29 @@ export function AppProvider({ children }) {
               referrerId: payload.referrerId ?? o.referrerId,
               involvementTier: payload.involvementTier ?? o.involvementTier,
               notes: payload.notes ?? o.notes,
+              campaignId: payload.campaignId ?? o.campaignId,
+              qualification: payload.qualification ?? o.qualification,
+              nextAction: payload.nextAction ?? o.nextAction,
+              nextActionDue: payload.nextActionDue ?? o.nextActionDue,
+              authority: payload.authority ?? o.authority,
+              timing: payload.timing ?? o.timing,
+              opportunityValue: payload.opportunityValue ?? o.opportunityValue,
               owners: {
                 ...o.owners,
                 estimatorId: payload.estimatorId || o.owners.estimatorId,
                 salespersonId: payload.salespersonId || o.owners.salespersonId,
               },
             }
-            const gate = gateStatus({ ...next, stage: 1 })
-            if (o.stage === 1 && gate.canAdvance) {
+            const gate = gateStatus({ ...next, stage: 2 })
+            if (o.stage === 2 && gate.canAdvance) {
               advanced = true
               return {
                 ...next,
-                stage: 2,
+                stage: 3,
                 slaStartedAt: nowIso(),
-                slaDueAt: addDays(nowIso(), unit.slaDays[2] || 5),
+                slaDueAt: addDays(nowIso(), unit.slaDays[3] || 7),
                 audit: [
-                  { id: uid('aud'), at: nowIso(), actorId: user?.id, action: 'Advanced stage', detail: 'Moved to estimation' },
+                  { id: uid('aud'), at: nowIso(), actorId: user?.id, action: 'Advanced stage', detail: 'Moved to engagement / inspection' },
                   ...(o.audit || []),
                 ],
               }
@@ -384,7 +413,7 @@ export function AppProvider({ children }) {
         const currentOpp = store.opportunities.find((o) => o.id === id)
         const variation = (currentOpp?.variations || [])[0]
         const variationAdvanced = !!(currentOpp?.variationPending && variation?.status === 're-estimate')
-        const goToProposal = variationAdvanced || currentOpp?.stage === 2
+        const goToProposal = variationAdvanced || currentOpp?.stage === 4
         patchOpp(
           id,
           (o) => {
@@ -418,12 +447,12 @@ export function AppProvider({ children }) {
                 ? o.variations.map((v, i) => (i === 0 ? { ...v, status: 'priced' } : v))
                 : o.variations,
             }
-            if (o.stage === 2) {
+            if (o.stage === 4) {
               return {
                 ...next,
-                stage: 3,
+                stage: 5,
                 slaStartedAt: nowIso(),
-                slaDueAt: addDays(nowIso(), unit?.slaDays?.[3] || 7),
+                slaDueAt: addDays(nowIso(), unit?.slaDays?.[5] || 10),
               }
             }
             return next
@@ -624,7 +653,7 @@ export function AppProvider({ children }) {
               {
                 id: uid('var'),
                 reason,
-                status: 're-estimate',
+                status: 'identify',
                 createdAt: nowIso(),
                 createdBy: user.id,
               },
@@ -752,11 +781,27 @@ export function AppProvider({ children }) {
       },
 
       signSubstage(id, key, payload) {
-        const isCommissioning = key === '7e'
+        const isCommissioning = key === '9b'
         patchOpp(
           id,
           (o) => {
-            const nextSubs = (o.siteWorks.substages || defaultSubstages()).map((s) =>
+            const nextHandover = (o.siteWorks.handover || defaultHandover()).map((s) =>
+              s.key === key
+                ? {
+                    ...s,
+                    status: payload.failed ? 'failed' : 'signed_off',
+                    defects: payload.defects || '',
+                    photos: payload.photos || s.photos,
+                    checklist: (s.checklist || []).map((c) => ({ ...c, done: true })),
+                    signedOffAt: payload.failed ? null : nowIso(),
+                    signedOffBy: payload.failed ? null : user.id,
+                  }
+                : s,
+            )
+            const isHandover = (o.siteWorks.handover || []).some((s) => s.key === key) || ['9a', '9b', '9c'].includes(key)
+            const nextSubs = isHandover
+              ? (o.siteWorks.substages || defaultSubstages())
+              : (o.siteWorks.substages || defaultSubstages()).map((s) =>
               s.key === key
                 ? {
                     ...s,
@@ -806,9 +851,14 @@ export function AppProvider({ children }) {
               : o.documents
             return {
               ...o,
-              siteWorks: { ...o.siteWorks, substages: nextSubs },
+              siteWorks: {
+                ...o.siteWorks,
+                substages: nextSubs,
+                handover: isHandover ? nextHandover : (o.siteWorks.handover || defaultHandover()),
+              },
               billingRequests,
               documents,
+              operationalComplete: isHandover && key === '9c' && !payload.failed ? true : o.operationalComplete,
             }
           },
           isCommissioning ? 'Commissioning recorded' : 'Site sub-stage updated',
@@ -844,6 +894,35 @@ export function AppProvider({ children }) {
         patchOpp(id, (o) => ({ ...o, rebates: [...(o.rebates || []), { id: uid('rb'), ...rebate }] }), 'Added rebate', rebate.type)
       },
 
+      addDocuments(id, records) {
+        const list = Array.isArray(records) ? records : [records]
+        patchOpp(
+          id,
+          (o) => {
+            const documents = [...list, ...(o.documents || [])]
+            const inspection = { ...(o.inspection || {}) }
+            if (list.some((r) => r.kind === 'photo' || r.type === 'photo' || r.type === 'site_photo')) {
+              inspection.photos = true
+            }
+            if (list.some((r) => r.type === 'drawing' || r.type === 'survey')) {
+              inspection.drawings = true
+            }
+            return { ...o, documents, inspection }
+          },
+          'Uploaded files',
+          list.map((r) => r.name).join(', '),
+        )
+      },
+
+      removeDocument(id, docId) {
+        patchOpp(
+          id,
+          (o) => ({ ...o, documents: (o.documents || []).filter((d) => d.id !== docId) }),
+          'Removed file',
+          '',
+        )
+      },
+
       closeOpportunity(id, closure) {
         const opp = store.opportunities.find((o) => o.id === id)
         const commission = commissionFor(opp, unit.commissionTiers)
@@ -851,8 +930,9 @@ export function AppProvider({ children }) {
           id,
           (o) => ({
             ...o,
-            stage: 9,
+            stage: 10,
             lifecycle: 'ClosedDelivered',
+            operationalComplete: true,
             closure: { ...closure, checklistComplete: true, closedAt: nowIso() },
             commission,
           }),
@@ -872,7 +952,7 @@ export function AppProvider({ children }) {
         patchOpp(
           id,
           (o) => {
-            const nextStage = Math.min(9, o.stage + 1)
+            const nextStage = Math.min(10, workStage(o.stage) + 1)
             return {
               ...o,
               stage: nextStage,
@@ -926,6 +1006,32 @@ export function AppProvider({ children }) {
         setStore((prev) => ({
           ...prev,
           units: prev.units.map((u) => (u.id === next.id ? { ...u, ...next } : u)),
+        }))
+      },
+
+      saveCampaign(next) {
+        setStore((prev) => {
+          const list = prev.campaigns || []
+          const exists = list.some((c) => c.id === next.id)
+          const row = {
+            ...next,
+            id: next.id || uid('camp'),
+            businessUnitId: next.businessUnitId || unit.id,
+            status: next.status || 'draft',
+          }
+          return {
+            ...prev,
+            campaigns: exists ? list.map((c) => (c.id === next.id ? { ...c, ...row } : c)) : [row, ...list],
+          }
+        })
+      },
+
+      approveCampaign(id) {
+        setStore((prev) => ({
+          ...prev,
+          campaigns: (prev.campaigns || []).map((c) =>
+            c.id === id ? { ...c, status: 'approved', approverId: user.id, approvedAt: nowIso() } : c,
+          ),
         }))
       },
     }

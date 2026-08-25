@@ -4,7 +4,7 @@ import { Card, PageHeader, Stat } from '../components/ui'
 import { STAGES, LIFECYCLE } from '../data/constants'
 import { money, relativeDue } from '../lib/format'
 import { canCreateLead, hasRole } from '../lib/permissions'
-import { selectedOption } from '../lib/workflow'
+import { selectedOption, stageMeta, workStage } from '../lib/workflow'
 
 export default function Dashboard() {
   const { user, unit, opportunities, notifications } = useApp()
@@ -17,8 +17,8 @@ export default function Dashboard() {
   )
   const byStage = STAGES.map((s) => ({
     ...s,
-    count: active.filter((o) => o.stage === s.id).length,
-    value: active.filter((o) => o.stage === s.id).reduce((sum, o) => sum + (selectedOption(o)?.priceEx || o.acceptedValue || 0), 0),
+    count: active.filter((o) => workStage(o.stage) === s.id).length,
+    value: active.filter((o) => workStage(o.stage) === s.id).reduce((sum, o) => sum + (selectedOption(o)?.priceEx || o.acceptedValue || 0), 0),
   }))
   const unread = notifications.filter((n) => !n.read)
 
@@ -67,7 +67,7 @@ export default function Dashboard() {
                   <button key={o.id} className="list-item" style={{ width: '100%', background: 'none', border: 0, textAlign: 'left', cursor: 'pointer' }} onClick={() => navigate(`/opportunities/${o.id}`)}>
                     <div>
                       <div className="row-title">{o.customer.legalName}</div>
-                      <div className="row-meta">{o.number} · {STAGES[o.stage - 1].label}</div>
+                      <div className="row-meta">{o.number} · {stageMeta(o.stage).label}</div>
                     </div>
                     <span className={`badge ${due.tone}`}>{due.label}</span>
                   </button>

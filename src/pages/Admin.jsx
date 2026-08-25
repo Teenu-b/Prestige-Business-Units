@@ -10,7 +10,7 @@ function emptyDraft(unitId) {
     email: '',
     title: '',
     password: '',
-    roles: ['LG'],
+    roles: ['BDM'],
     unitIds: [unitId],
   }
 }
@@ -171,7 +171,7 @@ export default function Admin() {
             <Field label="Deposit %"><input type="number" defaultValue={unit.billing[0].percent} disabled={!admin} onBlur={(e) => admin && saveUnit({ ...unit, billing: unit.billing.map((b, i) => i === 0 ? { ...b, percent: Number(e.target.value) } : b) })} /></Field>
             <Field label="Delivery %"><input type="number" defaultValue={unit.billing[1].percent} disabled={!admin} /></Field>
             <Field label="Final %"><input type="number" defaultValue={unit.billing[2].percent} disabled={!admin} /></Field>
-            <Field label="Lead SLA (days)"><input type="number" defaultValue={unit.slaDays[1]} disabled={!admin} onBlur={(e) => admin && saveUnit({ ...unit, slaDays: { ...unit.slaDays, 1: Number(e.target.value) } })} /></Field>
+            <Field label="Lead SLA (days)"><input type="number" defaultValue={unit.slaDays[2]} disabled={!admin} onBlur={(e) => admin && saveUnit({ ...unit, slaDays: { ...unit.slaDays, 2: Number(e.target.value) } })} /></Field>
           </div>
           <p className="lede" style={{ marginTop: 16 }}>Commission tiers and remaining SLA values can be extended here without a code change in a later build. Billing percentages must total 100%.</p>
           {admin ? <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={resetDemo}>Reset demo data</button> : null}

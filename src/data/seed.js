@@ -5,7 +5,7 @@ import {
   INVOLVEMENT_TIERS,
 } from './constants'
 import { addDays, uid } from '../lib/format'
-import { calcMargin, defaultApprovals, defaultSubstages, gstOn } from '../lib/workflow'
+import { calcMargin, defaultApprovals, defaultHandover, defaultSubstages, gstOn } from '../lib/workflow'
 
 const T0 = '2026-08-19T08:00:00.000Z'
 const daysAgo = (n) => addDays(T0, -n)
@@ -40,6 +40,22 @@ export function createSeed() {
       code: 'PRS',
       name: 'Prestige Renewable Solutions',
       legalName: 'Prestige Renewable Solutions Pty Ltd',
+      status: 'active',
+      timezone: 'Australia/Sydney',
+      marginFloor: DEFAULT_MARGIN_FLOOR,
+      billing: [
+        { key: 'deposit', percent: 20 },
+        { key: 'delivery', percent: 40 },
+        { key: 'final', percent: 40 },
+      ],
+      commissionTiers: INVOLVEMENT_TIERS.map((t) => ({ ...t })),
+      slaDays: { ...DEFAULT_SLA_DAYS },
+    },
+    {
+      id: 'syd',
+      code: 'SYD',
+      name: 'Sydpro Electrical & Solar Services',
+      legalName: 'Sydpro Electrical & Solar Services Pty Ltd',
       status: 'active',
       timezone: 'Australia/Sydney',
       marginFloor: DEFAULT_MARGIN_FLOOR,
@@ -108,7 +124,7 @@ export function createSeed() {
       email: 'baiju@prestige.group',
       password: DEMO_PASSWORD,
       roles: ['DIR'],
-      unitIds: ['prs', 'pcc', 'pci', 'ip'],
+      unitIds: ['prs', 'syd', 'pcc', 'pci', 'ip'],
       title: 'Founder / Director',
     },
     {
@@ -116,9 +132,9 @@ export function createSeed() {
       name: 'Priya Chen',
       email: 'priya@prestige.group',
       password: DEMO_PASSWORD,
-      roles: ['SS', 'SLS'],
-      unitIds: ['prs'],
-      title: 'Sales Supervisor',
+      roles: ['BDM'],
+      unitIds: ['prs', 'syd'],
+      title: 'Business Development / Sales Manager',
     },
     {
       id: 'u_james',
@@ -126,17 +142,17 @@ export function createSeed() {
       email: 'james@prestige.group',
       password: DEMO_PASSWORD,
       roles: ['EST'],
-      unitIds: ['prs'],
-      title: 'Opportunity Estimator',
+      unitIds: ['prs', 'syd'],
+      title: 'Estimator',
     },
     {
       id: 'u_sarah',
       name: 'Sarah Nguyen',
       email: 'sarah@prestige.group',
       password: DEMO_PASSWORD,
-      roles: ['LG'],
+      roles: ['BDM'],
       unitIds: ['prs'],
-      title: 'Lead Generator',
+      title: 'BDM staff (lead capture)',
     },
     {
       id: 'u_mark',
@@ -144,8 +160,8 @@ export function createSeed() {
       email: 'mark@prestige.group',
       password: DEMO_PASSWORD,
       roles: ['BOP'],
-      unitIds: ['prs'],
-      title: 'Business Operations',
+      unitIds: ['prs', 'syd'],
+      title: 'Business Operations Manager',
     },
     {
       id: 'u_ana',
@@ -153,7 +169,7 @@ export function createSeed() {
       email: 'ana@prestige.group',
       password: DEMO_PASSWORD,
       roles: ['SOM'],
-      unitIds: ['prs'],
+      unitIds: ['prs', 'syd'],
       title: 'Site Operations Manager',
     },
     {
@@ -161,9 +177,9 @@ export function createSeed() {
       name: 'Claire Walsh',
       email: 'claire@prestige.group',
       password: DEMO_PASSWORD,
-      roles: ['CC'],
-      unitIds: ['prs'],
-      title: 'Compliance & Contracts',
+      roles: ['BOP'],
+      unitIds: ['prs', 'syd'],
+      title: 'Business Operations (controls)',
     },
     {
       id: 'u_david',
@@ -171,7 +187,7 @@ export function createSeed() {
       email: 'david@prestige.group',
       password: DEMO_PASSWORD,
       roles: ['ACC'],
-      unitIds: ['prs'],
+      unitIds: ['prs', 'syd'],
       title: 'Accounts',
     },
     {
@@ -180,7 +196,7 @@ export function createSeed() {
       email: 'admin@prestige.group',
       password: DEMO_PASSWORD,
       roles: ['ADM'],
-      unitIds: ['prs', 'pcc', 'pci', 'ip'],
+      unitIds: ['prs', 'syd', 'pcc', 'pci', 'ip'],
       title: 'System Administrator',
     },
     {
@@ -247,7 +263,7 @@ export function createSeed() {
     variations: [],
     approvals: [],
     purchaseOrders: [],
-    siteWorks: { installWindowStart: '', installWindowEnd: '', electricalContractor: '', civilContractor: '', substages: defaultSubstages() },
+    siteWorks: { installWindowStart: '', installWindowEnd: '', electricalContractor: '', civilContractor: '', substages: defaultSubstages(), handover: defaultHandover() },
     billingRequests: [],
     rebates: [],
     documents: [],
@@ -256,6 +272,20 @@ export function createSeed() {
     notes: '',
     acceptedValue: 0,
     closure: null,
+    campaignId: 'camp_q3',
+    qualification: 'nurture',
+    nextAction: 'Follow up',
+    nextActionDue: daysAgo(-3),
+    authority: 'Decision-maker identified',
+    timing: 'This quarter',
+    opportunityValue: '',
+    inspection: { photos: false, drawings: false, measurements: false, constraints: '' },
+    meetings: [],
+    jobBaseline: { budgetConfirmed: false, costCategories: false, keyDates: '', notes: '' },
+    service: { reviewRequested: false, referralCaptured: false, actions: '' },
+    operationalComplete: false,
+    financialComplete: false,
+    estimateReturn: null,
     ...partial,
   })
 
@@ -263,7 +293,8 @@ export function createSeed() {
     base({
       id: 'opp_1',
       number: 'PRS-26-0008',
-      stage: 1,
+      stage: 2,
+      campaignId: 'camp_web',
       customer: { legalName: 'Parramatta Medical Centre', tradingName: 'PMC', abn: '51 882 109 334', email: 'facilities@pmc.health', phone: '02 9890 4410', billingAddress: '12 Darcy St, Parramatta NSW 2150' },
       site: { line1: '12 Darcy St', suburb: 'Parramatta', state: 'NSW', postcode: '2150', jurisdiction: 'NSW', contact: 'Dr. A. Menon', accessNotes: 'After-hours loading dock' },
       contact: { name: 'Anika Menon', role: 'Practice manager', email: 'anika.menon@pmc.health', phone: '0418 220 119' },
@@ -279,7 +310,7 @@ export function createSeed() {
     base({
       id: 'opp_2',
       number: 'PRS-26-0003',
-      stage: 1,
+      stage: 2,
       customer: { legalName: 'Riverstone Cold Chain Pty Ltd', tradingName: 'Riverstone Cold', abn: '22 109 887 441', email: 'ops@riverstonecc.com.au', phone: '02 9627 1180', billingAddress: '44 Garfield Rd, Riverstone NSW 2765' },
       site: { line1: '44 Garfield Rd', suburb: 'Riverstone', state: 'NSW', postcode: '2765', jurisdiction: 'NSW', contact: 'Paul Singh', accessNotes: '' },
       contact: { name: 'Paul Singh', role: 'Operations director', email: 'paul.singh@riverstonecc.com.au', phone: '0401 772 330' },
@@ -295,12 +326,16 @@ export function createSeed() {
     base({
       id: 'opp_3',
       number: 'PRS-26-0011',
-      stage: 2,
+      stage: 4,
       customer: { legalName: 'North Rocks Logistics Pty Ltd', tradingName: 'NRL', abn: '18 440 221 908', email: 'accounts@nrlogistics.com.au', phone: '02 9871 2200', billingAddress: '116/14 Loyalty Rd, North Rocks NSW 2151' },
       site: { line1: '14 Loyalty Rd', suburb: 'North Rocks', state: 'NSW', postcode: '2151', jurisdiction: 'NSW', contact: 'Helen Cho', accessNotes: 'Gate 2, 6am–3pm' },
       contact: { name: 'Helen Cho', role: 'Facilities lead', email: 'helen.cho@nrlogistics.com.au', phone: '0433 901 228' },
       energy: { annualKwh: 640000, hasBills: true, notes: 'Two NMI meters' },
       owners: { leadId: 'u_sarah', estimatorId: 'u_james', salespersonId: 'u_priya', deliveryId: '' },
+      qualification: 'qualified',
+      nextAction: 'Issue estimation pack',
+      inspection: { photos: true, drawings: true, measurements: true, constraints: 'Gate 2 hours only' },
+      meetings: [{ id: 'mtg_3', at: daysAgo(5), attendees: 'Helen Cho, Priya Chen', outcome: 'Site walk complete', nextStep: 'Estimate hybrid BESS' }],
       leadSource: 'referrer',
       referrerId: 'ref_greenfield',
       involvementTier: 'lead_sales_support',
@@ -338,7 +373,8 @@ export function createSeed() {
     base({
       id: 'opp_4',
       number: 'PRS-26-0006',
-      stage: 3,
+      stage: 5,
+      campaignId: 'camp_events',
       customer: { legalName: 'Hills District Strata Plan 88421', tradingName: 'The Crest Apartments', abn: '', email: 'committee@thecrest.nsw', phone: '02 9659 4411', billingAddress: '8 Barclay Rd, North Rocks NSW 2151' },
       site: { line1: '8 Barclay Rd', suburb: 'North Rocks', state: 'NSW', postcode: '2151', jurisdiction: 'NSW', contact: 'Strata manager', accessNotes: 'Visitor parking only' },
       contact: { name: 'Robert Hale', role: 'Strata chair', email: 'rhale@thecrest.nsw', phone: '0409 118 773' },
@@ -400,7 +436,7 @@ export function createSeed() {
     base({
       id: 'opp_5',
       number: 'PRS-26-0004',
-      stage: 4,
+      stage: 5,
       customer: { legalName: 'Western Sydney Warehouse Co', tradingName: 'WSW', abn: '77 201 554 118', email: 'cfo@wsw.com.au', phone: '02 9675 3300', billingAddress: '2–8 Reconciliation Rd, Pemulwuy NSW 2145' },
       site: { line1: '2 Reconciliation Rd', suburb: 'Pemulwuy', state: 'NSW', postcode: '2145', jurisdiction: 'NSW', contact: 'Site manager', accessNotes: 'Inducted contractors only' },
       contact: { name: 'Maya Brennan', role: 'CFO', email: 'maya.brennan@wsw.com.au', phone: '0422 667 901' },
@@ -455,7 +491,7 @@ export function createSeed() {
     base({
       id: 'opp_6',
       number: 'PRS-26-0002',
-      stage: 5,
+      stage: 6,
       customer: { legalName: 'ACT Government Depot', tradingName: 'TCCS Depot', abn: '13 685 323 490', email: 'procurement@act.gov.au', phone: '02 6207 5111', billingAddress: '12 Callam St, Woden ACT 2606' },
       site: { line1: '9 Sandford St', suburb: 'Mitchell', state: 'ACT', postcode: '2911', jurisdiction: 'ACT', contact: 'Yard supervisor', accessNotes: 'Security escort required' },
       contact: { name: 'Liam Hart', role: 'Asset manager', email: 'liam.hart@act.gov.au', phone: '02 6207 4481' },
@@ -466,6 +502,7 @@ export function createSeed() {
       slaStartedAt: daysAgo(8),
       slaDueAt: slaDue(5, daysAgo(8)),
       acceptedValue: 642000,
+      jobBaseline: { budgetConfirmed: false, costCategories: false, keyDates: '', notes: '' },
       estimates: [
         {
           id: 'est_6',
@@ -517,7 +554,7 @@ export function createSeed() {
     base({
       id: 'opp_7',
       number: 'PRS-26-0001',
-      stage: 6,
+      stage: 7,
       customer: { legalName: 'Newcastle Port Authority', tradingName: 'Port of Newcastle', abn: '54 987 112 003', email: 'capex@portofnewcastle.com.au', phone: '02 4908 8200', billingAddress: 'Level 4, 400 Hunter St, Newcastle NSW 2300' },
       site: { line1: 'Mayfield Berth 4', suburb: 'Mayfield', state: 'NSW', postcode: '2304', jurisdiction: 'NSW', contact: 'Wharf operations', accessNotes: 'MSIC required' },
       contact: { name: 'Greta Holm', role: 'Energy program lead', email: 'g.holm@portofnewcastle.com.au', phone: '0490 220 118' },
@@ -528,6 +565,7 @@ export function createSeed() {
       slaStartedAt: daysAgo(6),
       slaDueAt: slaDue(6, daysAgo(6)),
       acceptedValue: 2180000,
+      jobBaseline: { budgetConfirmed: true, costCategories: true, keyDates: 'WHARF access from 4 Sep 2026', notes: 'Baseline locked' },
       estimates: [
         {
           id: 'est_7',
@@ -575,7 +613,8 @@ export function createSeed() {
     base({
       id: 'opp_8',
       number: 'PRS-26-0005',
-      stage: 7,
+      stage: 8,
+      campaignId: 'camp_events',
       customer: { legalName: 'Canberra EV Hub Pty Ltd', tradingName: 'Capital Charge', abn: '61 332 908 771', email: 'build@capitalcharge.au', phone: '02 6100 2290', billingAddress: '1 Constitution Ave, Canberra ACT 2601' },
       site: { line1: '88 Flemington Rd', suburb: 'Mitchell', state: 'ACT', postcode: '2911', jurisdiction: 'ACT', contact: 'Site supervisor', accessNotes: 'Shared yard with neighbouring warehouse' },
       contact: { name: 'Sofia Rahman', role: 'Project director', email: 'sofia@capitalcharge.au', phone: '0417 662 009' },
@@ -619,12 +658,13 @@ export function createSeed() {
         electricalContractor: 'Capital Spark Electrical',
         civilContractor: 'Monaro Civil',
         substages: defaultSubstages().map((s) => {
-          if (s.key === '7a' || s.key === '7b') {
-            return { ...s, status: 'signed_off', signedOffAt: daysAgo(s.key === '7a' ? 8 : 4), signedOffBy: 'u_ana', checklist: s.checklist.map((c) => ({ ...c, done: true })), photos: [{ name: `${s.key}-photo.jpg`, at: daysAgo(4) }] }
+          if (s.key === '8a' || s.key === '8b') {
+            return { ...s, status: 'signed_off', signedOffAt: daysAgo(s.key === '8a' ? 8 : 4), signedOffBy: 'u_ana', checklist: s.checklist.map((c) => ({ ...c, done: true })), photos: [{ name: `${s.key}-photo.jpg`, at: daysAgo(4) }] }
           }
-          if (s.key === '7c') return { ...s, status: 'in_progress' }
+          if (s.key === '8c') return { ...s, status: 'in_progress' }
           return s
         }),
+        handover: defaultHandover(),
       },
       billingRequests: [
         billing('deposit', 20, 104800, 'paid', daysAgo(32), { invoiceNumber: 'INV-10118', paymentStatus: 'paid', event: 'Customer acceptance' }),
@@ -635,7 +675,8 @@ export function createSeed() {
     base({
       id: 'opp_9',
       number: 'PRS-26-0007',
-      stage: 8,
+      stage: 9,
+      campaignId: 'camp_web',
       customer: { legalName: 'Penrith Fresh Markets', tradingName: 'Penrith Fresh', abn: '90 221 667 445', email: 'finance@penrithfresh.com.au', phone: '02 4721 0090', billingAddress: '123 Mulgoa Rd, Penrith NSW 2750' },
       site: { line1: '123 Mulgoa Rd', suburb: 'Penrith', state: 'NSW', postcode: '2750', jurisdiction: 'NSW', contact: 'Centre manager', accessNotes: '' },
       contact: { name: 'Owen Blake', role: 'Owner', email: 'owen@penrithfresh.com.au', phone: '0412 009 441' },
@@ -680,6 +721,7 @@ export function createSeed() {
         electricalContractor: 'Nepean Electrical',
         civilContractor: 'Westline Civil',
         substages: defaultSubstages().map((s) => ({ ...s, status: 'signed_off', signedOffAt: daysAgo(4), signedOffBy: 'u_ana', checklist: s.checklist.map((c) => ({ ...c, done: true })) })),
+        handover: defaultHandover().map((s) => (s.key === '9c' ? s : { ...s, status: 'signed_off', signedOffAt: daysAgo(3), signedOffBy: 'u_ana', checklist: s.checklist.map((c) => ({ ...c, done: true })) })),
       },
       billingRequests: [
         billing('deposit', 20, 55200, 'paid', daysAgo(50), { invoiceNumber: 'INV-9901', paymentStatus: 'paid', event: 'Customer acceptance' }),
@@ -696,7 +738,7 @@ export function createSeed() {
     base({
       id: 'opp_10',
       number: 'PRS-26-0009',
-      stage: 9,
+      stage: 10,
       lifecycle: 'Active',
       customer: { legalName: 'QLD Cold Store Group', tradingName: 'QCS Logan', abn: '44 118 990 226', email: 'ap@qcs.group', phone: '07 3801 2200', billingAddress: '55 Enterprise St, Logan QLD 4114' },
       site: { line1: '55 Enterprise St', suburb: 'Logan', state: 'QLD', postcode: '4114', jurisdiction: 'QLD', contact: 'Plant manager', accessNotes: '' },
@@ -739,6 +781,7 @@ export function createSeed() {
         electricalContractor: 'Logan Power',
         civilContractor: 'Q-Civil',
         substages: defaultSubstages().map((s) => ({ ...s, status: 'signed_off', signedOffAt: daysAgo(14), signedOffBy: 'u_ana', checklist: s.checklist.map((c) => ({ ...c, done: true })) })),
+        handover: defaultHandover().map((s) => ({ ...s, status: 'signed_off', signedOffAt: daysAgo(10), signedOffBy: 'u_ana', checklist: s.checklist.map((c) => ({ ...c, done: true })) })),
       },
       billingRequests: [
         billing('deposit', 20, 178000, 'paid', daysAgo(80), { invoiceNumber: 'INV-8801', paymentStatus: 'paid', event: 'Customer acceptance' }),
@@ -746,6 +789,9 @@ export function createSeed() {
         billing('final', 40, 356000, 'paid', daysAgo(14), { invoiceNumber: 'INV-9808', paymentStatus: 'paid', event: 'Commissioning sign-off' }),
       ],
       rebates: [{ id: 'rb_10', type: 'QLD Business Energy Saver', value: 40000, status: 'Lodged', lodgedAt: daysAgo(10), reference: 'QBES-2291' }],
+      operationalComplete: true,
+      financialComplete: true,
+      service: { reviewRequested: false, referralCaptured: false, actions: 'Request Google review' },
       closure: { checklistComplete: false, warrantyContact: '', futureEngagement: '', closedAt: null },
       audit: [audit('u_david', 'Reconciled final invoice', 'INV-9808 paid', daysAgo(6))],
     }),
@@ -757,10 +803,77 @@ export function createSeed() {
     { id: 'n3', userId: 'u_james', title: 'Estimate assigned', body: 'PRS-26-0011 North Rocks Logistics is ready for options modelling.', opportunityId: 'opp_3', at: daysAgo(4), read: false },
     { id: 'n4', userId: 'u_priya', title: 'Feedback needed', body: 'PRS-26-0006 The Crest proposal has been presented — capture customer feedback to continue.', opportunityId: 'opp_4', at: daysAgo(2), read: true },
     { id: 'n5', userId: 'u_mark', title: 'DNSP still pending', body: 'PRS-26-0002 ACT Depot — Evoenergy application EV-4412 is awaiting outcome.', opportunityId: 'opp_6', at: daysAgo(2), read: false },
-    { id: 'n6', userId: 'u_ana', title: 'Site readiness in progress', body: 'PRS-26-0005 Canberra EV Hub is on sub-stage 7c.', opportunityId: 'opp_8', at: daysAgo(0), read: false },
+    { id: 'n6', userId: 'u_ana', title: 'Installation in progress', body: 'PRS-26-0005 Canberra EV Hub is on installation checklist 8c.', opportunityId: 'opp_8', at: daysAgo(0), read: false },
     { id: 'n7', userId: 'u_david', title: 'Final billing request ready', body: 'PRS-26-0007 Penrith Fresh — record the tax invoice reference.', opportunityId: 'opp_9', at: daysAgo(3), read: false },
     { id: 'n8', userId: 'u_tom', title: 'Lead update', body: 'Your introduction PRS-26-0011 is now in estimation.', opportunityId: 'opp_3', at: daysAgo(4), read: false },
   ]
 
-  return { units, users, referrers, opportunities, notifications }
+  const campaigns = [
+    {
+      id: 'camp_q3',
+      businessUnitId: 'prs',
+      name: 'Q3 C&I storage outreach',
+      channel: 'LinkedIn + partner events',
+      audience: 'Warehouses and medical precincts, Greater Sydney',
+      objective: 'Qualified hybrid BESS leads',
+      budget: 18000,
+      actualSpend: 12400,
+      status: 'approved',
+      approverId: 'u_baiju',
+      approvedAt: daysAgo(20),
+      ownerId: 'u_priya',
+      startDate: '2026-07-01',
+      endDate: '2026-09-30',
+    },
+    {
+      id: 'camp_events',
+      businessUnitId: 'prs',
+      name: 'Industry breakfast series',
+      channel: 'In-person events',
+      audience: 'Strata chairs and facilities managers',
+      objective: 'Site inspections from event follow-up',
+      budget: 8000,
+      actualSpend: 6400,
+      status: 'approved',
+      approverId: 'u_baiju',
+      approvedAt: daysAgo(30),
+      ownerId: 'u_priya',
+      startDate: '2026-06-01',
+      endDate: '2026-08-31',
+    },
+    {
+      id: 'camp_web',
+      businessUnitId: 'prs',
+      name: 'Website & inbound enquiry',
+      channel: 'Google Ads + website form',
+      audience: 'C&I inbound, Greater Sydney',
+      objective: 'Capture inbound enquiries',
+      budget: 6000,
+      actualSpend: 4100,
+      status: 'approved',
+      approverId: 'u_priya',
+      approvedAt: daysAgo(40),
+      ownerId: 'u_priya',
+      startDate: '2026-05-01',
+      endDate: '2026-12-31',
+    },
+    {
+      id: 'camp_syd',
+      businessUnitId: 'syd',
+      name: 'Sydpro residential solar winter',
+      channel: 'Local radio + Google Ads',
+      audience: 'Owner-occupiers, North Shore',
+      objective: 'Site inspections booked',
+      budget: 9000,
+      actualSpend: 2100,
+      status: 'draft',
+      approverId: null,
+      approvedAt: null,
+      ownerId: 'u_priya',
+      startDate: '2026-08-01',
+      endDate: '2026-10-15',
+    },
+  ]
+
+  return { units, users, referrers, campaigns, opportunities, notifications }
 }

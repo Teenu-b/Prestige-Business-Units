@@ -20,7 +20,7 @@ export default function Pipeline() {
       .filter((o) => (lifeFilter === 'all' ? true : o.lifecycle === lifeFilter))
       .filter((o) => (stageFilter ? String(o.stage) === stageFilter : true))
       .filter((o) => {
-        const hay = `${o.number} ${o.customer.legalName} ${o.site.suburb}`.toLowerCase()
+        const hay = `${o.number || ''} ${o.customer?.legalName || ''} ${o.site?.suburb || ''}`.toLowerCase()
         return hay.includes(q.toLowerCase())
       })
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
@@ -74,7 +74,7 @@ export default function Pipeline() {
                     <td>{stageMeta(o.stage).label}{o.variationPending ? ' · variation' : ''}</td>
                     <td>{money(option?.priceEx || o.acceptedValue)}</td>
                     <td><Badge tone={due.tone}>{due.label}</Badge></td>
-                    <td><Badge tone={LIFECYCLE[o.lifecycle].tone}>{LIFECYCLE[o.lifecycle].label}</Badge></td>
+                    <td><Badge tone={(LIFECYCLE[o.lifecycle] || LIFECYCLE.Active).tone}>{(LIFECYCLE[o.lifecycle] || LIFECYCLE.Active).label}</Badge></td>
                   </tr>
                 )
               })}

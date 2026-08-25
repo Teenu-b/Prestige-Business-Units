@@ -6,9 +6,9 @@ import { DEMO_PASSWORD } from '../data/constants'
 
 const QUICK = [
   { email: 'baiju@prestige.group', label: 'Baiju Scariah', role: 'Director' },
-  { email: 'priya@prestige.group', label: 'Priya Chen', role: 'Sales supervisor' },
+  { email: 'priya@prestige.group', label: 'Priya Chen', role: 'BDM / Sales Manager' },
   { email: 'james@prestige.group', label: 'James Okonkwo', role: 'Estimator' },
-  { email: 'sarah@prestige.group', label: 'Sarah Nguyen', role: 'Lead generator' },
+  { email: 'sarah@prestige.group', label: 'Sarah Nguyen', role: 'BDM staff' },
   { email: 'ana@prestige.group', label: 'Ana Torres', role: 'Site operations' },
   { email: 'david@prestige.group', label: 'David Kim', role: 'Accounts' },
   { email: 'admin@prestige.group', label: 'Helen Park', role: 'Administrator' },
@@ -39,16 +39,16 @@ export default function Login() {
             <div className="brand-mark">P</div>
             <div>
               <div className="brand-name">Prestige</div>
-              <div className="brand-sub">Industrial Group</div>
+              <div className="brand-sub">Prestige & Sydpro</div>
             </div>
           </div>
-          <h2>One record. Nine stages. Every business unit.</h2>
+          <h2>One record from lead to service. Two businesses.</h2>
           <p>
-            Capture the lead, protect the margin, and take delivery through to handover —
-            without the spreadsheet trail.
+            Capture any lead — campaign, referrer, inbound or repeat — then estimate, deliver and handover.
+            Marketing campaigns live in their own module.
           </p>
         </div>
-        <p>Prestige Renewable Solutions · North Rocks NSW</p>
+        <p>Prestige Renewable Solutions · Sydpro Electrical & Solar Services</p>
       </section>
       <section className="login-panel">
         <form className="login-card" onSubmit={submit}>

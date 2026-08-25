@@ -99,8 +99,8 @@ export function Modal({ title, body, children, onClose, actions, className = '' 
 export function CustomerCell({ opp }) {
   return (
     <div>
-      <div className="row-title">{opp.customer.legalName}</div>
-      <div className="row-meta">{opp.number} · {opp.site.suburb} {opp.site.state}</div>
+      <div className="row-title">{opp?.customer?.legalName || 'Untitled'}</div>
+      <div className="row-meta">{opp?.number} · {opp?.site?.suburb} {opp?.site?.state}</div>
     </div>
   )
 }

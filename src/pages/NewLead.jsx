@@ -5,10 +5,10 @@ import { BackLink, PageHeader } from '../components/ui'
 import LeadForm, { emptyLeadForm, estimatorChoices, payloadFromLeadForm, validateLeadForm } from '../components/LeadForm'
 
 export default function NewLead() {
-  const { createLead, users, referrers, unit, user } = useApp()
+  const { createLead, users, referrers, unit, user, campaigns } = useApp()
   const navigate = useNavigate()
   const estimators = estimatorChoices(users, unit.id)
-  const sales = users.filter((u) => (u.roles.includes('SLS') || u.roles.includes('SS')) && u.unitIds.includes(unit.id))
+  const sales = users.filter((u) => (u.roles.includes('BDM') || u.roles.includes('DBD')) && u.unitIds.includes(unit.id))
   const [form, setForm] = useState(() => {
     const base = emptyLeadForm(user)
     if (!base.estimatorId && estimators[0]) base.estimatorId = estimators[0].id
@@ -48,7 +48,7 @@ export default function NewLead() {
       <BackLink />
       <PageHeader
         title="New lead"
-        lede="Complete every required field to qualify the lead and move it to estimation. You can open the Lead stage again later from the stepper."
+        lede="Qualify the lead. A complete Qualified record moves to inspection, then estimation."
       />
 
       <form onSubmit={submit} className="card card-pad" noValidate>
@@ -59,17 +59,18 @@ export default function NewLead() {
           estimators={estimators}
           sales={sales}
           referrers={referrers}
+          campaigns={campaigns || []}
           user={user}
         />
         {errorList.length ? (
           <div className="alert danger">
-            Fix {errorList.length} {errorList.length === 1 ? 'field' : 'fields'} before the lead can move to estimation.
+            Fix {errorList.length} {errorList.length === 1 ? 'field' : 'fields'} before saving.
             <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
               {[...new Set(errorList)].map((msg) => <li key={msg}>{msg}</li>)}
             </ul>
           </div>
         ) : null}
-        <button className="btn btn-primary" type="submit">Save and continue to estimation</button>
+        <button className="btn btn-primary" type="submit">Save lead</button>
       </form>
     </>
   )

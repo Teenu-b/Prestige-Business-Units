@@ -15,6 +15,7 @@ import Notifications from './pages/Notifications'
 import { hasRole } from './lib/permissions'
 import Costs from './pages/Costs'
 import Quotes from './pages/Quotes'
+import Marketing from './pages/Marketing'
 
 function Guard({ children, roles }) {
   const { user } = useApp()
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/costs" element={<Costs />} />
         <Route path="/quotes" element={<Quotes />} />
+        <Route path="/marketing" element={<Marketing />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

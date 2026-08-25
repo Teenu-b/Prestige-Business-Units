@@ -3,8 +3,10 @@ import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import StageStepper from '../components/StageStepper'
 import LeadForm, { estimatorChoices, formFromOpportunity, payloadFromLeadForm, validateLeadForm } from '../components/LeadForm'
+import FileUpload from '../components/FileUpload'
 import { Badge, Field, Modal, NumberInput } from '../components/ui'
 import {
+  HANDOVER_SUBSTAGES,
   LIFECYCLE,
   PRODUCT_RANGES,
   SITE_SUBSTAGES,
@@ -19,6 +21,7 @@ import {
   canManageBilling,
   canManageProcurement,
   canSeeCost,
+  canSetupJob,
   canSignSite,
   hasRole,
 } from '../lib/permissions'
@@ -32,6 +35,7 @@ import {
   incGst,
   selectedOption,
   stageMeta,
+  workStage,
   VARIATION_STEPS,
   variationNextStep,
 } from '../lib/workflow'
@@ -42,11 +46,11 @@ export default function Opportunity() {
   const opp = app.opportunities.find((o) => o.id === id) || app.allOpportunities.find((o) => o.id === id)
   const [tab, setTab] = useState('work')
   const [gateError, setGateError] = useState(null)
-  const [viewStage, setViewStage] = useState(opp?.stage || 1)
+  const [viewStage, setViewStage] = useState(workStage(opp?.stage))
   const workRef = useRef(null)
 
   useEffect(() => {
-    setViewStage(opp?.stage || 1)
+    setViewStage(workStage(opp?.stage))
   }, [opp?.id])
 
   const showStage = (stageId) => {
@@ -77,7 +81,7 @@ export default function Opportunity() {
     if (!result.ok) setGateError(result.missing)
     else {
       setGateError(null)
-      setViewStage(Math.min(9, opp.stage + 1))
+      setViewStage(Math.min(10, workStage(opp.stage) + 1))
     }
   }
 
@@ -87,20 +91,20 @@ export default function Opportunity() {
       <div className="opp-hero">
         <div>
           <div className="kicker">{opp.number}</div>
-          <h1>{opp.customer.legalName}</h1>
+          <h1>{opp.customer?.legalName || opp.number}</h1>
           <div className="meta-row">
-            <span>{opp.site.line1}, {opp.site.suburb} {opp.site.state} {opp.site.postcode}</span>
+            <span>{opp.site?.line1}, {opp.site?.suburb} {opp.site?.state} {opp.site?.postcode}</span>
             <span>{money(option?.priceEx || opp.acceptedValue)}</span>
             {canSeeCost(app.user) && option ? <span>Margin {pct(option.margin)}</span> : null}
-            <Badge tone={LIFECYCLE[opp.lifecycle].tone}>{LIFECYCLE[opp.lifecycle].label}</Badge>
+            <Badge tone={(LIFECYCLE[opp.lifecycle] || LIFECYCLE.Active).tone}>{(LIFECYCLE[opp.lifecycle] || LIFECYCLE.Active).label}</Badge>
             <Badge tone={due.tone}>{due.label}</Badge>
             {opp.variationPending ? <Badge tone="warning">Variation pending</Badge> : null}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {canAdvance(app.user, opp) && opp.stage < 9 && opp.stage !== 1 && opp.lifecycle === 'Active' ? (
+          {canAdvance(app.user, opp) && workStage(opp.stage) < 10 && opp.lifecycle === 'Active' ? (
             <button className="btn btn-primary" onClick={advance} disabled={!gate.canAdvance}>
-              Advance to {stageMeta(Math.min(9, opp.stage + 1)).short}
+              Advance to {stageMeta(Math.min(10, workStage(opp.stage) + 1)).short}
             </button>
           ) : null}
         </div>
@@ -108,27 +112,27 @@ export default function Opportunity() {
 
       <StageStepper stage={opp.stage} viewStage={viewStage} onSelect={showStage} />
 
-      {viewStage !== opp.stage ? (
+      {workStage(viewStage) !== workStage(opp.stage) ? (
         <div className="alert info" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <span>Viewing {stageMeta(viewStage).label}. Current stage is {stageMeta(opp.stage).label}.</span>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => showStage(opp.stage)}>Back to current stage</button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => showStage(workStage(opp.stage))}>Back to current stage</button>
         </div>
       ) : null}
 
       {gateError ? <div className="alert warning">Still needed: {gateError.join(', ')}</div> : null}
-      {opp.variationPending && opp.stage >= 5 ? (
+      {opp.variationPending && opp.stage >= 6 ? (
         <VariationGuide
           opp={opp}
           app={app}
-          onOpenEstimate={() => showStage(2)}
-          onOpenProposal={() => showStage(3)}
+          onOpenEstimate={() => showStage(4)}
+          onOpenProposal={() => showStage(5)}
           onProgress={(status) => {
-            if (status === 'priced') showStage(3)
-            if (status === 'presented') showStage(4)
+            if (status === 'priced') showStage(5)
+            if (status === 'presented') showStage(5)
             if (status === 'accepted') showStage(opp.stage)
           }}
         />
-      ) : !gate.canAdvance && opp.lifecycle === 'Active' && opp.stage !== 1 ? (
+      ) : !gate.canAdvance && opp.lifecycle === 'Active' ? (
         <div className="alert info">To leave {stageMeta(opp.stage).label}: {gate.missing.join(' · ')}</div>
       ) : null}
 
@@ -139,25 +143,20 @@ export default function Opportunity() {
       </div>
 
       <div ref={workRef}>
-        {tab === 'work' ? <StagePanel opp={opp} app={app} userName={userName} viewStage={viewStage} onIssued={(result) => { if (result?.ok) showStage(3) }} /> : null}
+        {tab === 'work' ? <StagePanel opp={opp} app={app} userName={userName} viewStage={viewStage} onIssued={(result) => { if (result?.ok) showStage(5) }} /> : null}
       </div>
       {tab === 'files' ? (
         <div className="card card-pad">
-          {(opp.documents || []).length === 0 ? <p className="lede">No files yet.</p> : (
-            <table className="table">
-              <thead><tr><th>File</th><th>Type</th><th>Uploaded</th><th>Mirror</th></tr></thead>
-              <tbody>
-                {opp.documents.map((d) => (
-                  <tr key={d.id} style={{ cursor: 'default' }}>
-                    <td>{d.name}</td>
-                    <td>{d.type}</td>
-                    <td>{formatDate(d.uploadedAt, true)}</td>
-                    <td><Badge tone={d.mirrorStatus === 'mirrored' ? 'success' : 'warning'}>{d.mirrorStatus}</Badge></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <FileUpload
+            files={opp.documents || []}
+            userId={app.user.id}
+            stage={opp.stage}
+            type="evidence"
+            title="Photos and documents"
+            hint="Attach evidence to this record. Photos, PDFs and office files, up to 3 MB each. Linked to the current stage."
+            onAdd={(records) => app.addDocuments(opp.id, records)}
+            onRemove={(docId) => app.removeDocument(opp.id, docId)}
+          />
         </div>
       ) : null}
       {tab === 'history' ? (
@@ -179,15 +178,15 @@ export default function Opportunity() {
 
 function StagePanel({ opp, app, userName, viewStage, onIssued }) {
   const panels = {
-    1: LeadPanel,
-    2: EstimatePanel,
-    3: ProposalPanel,
-    4: ClosurePanel,
-    5: ApprovalsPanel,
-    6: ProcurementPanel,
-    7: SitePanel,
-    8: BillingPanel,
-    9: HandoverPanel,
+    2: LeadPanel,
+    3: EngagementPanel,
+    4: EstimatePanel,
+    5: ProposalPanel,
+    6: JobSetupPanel,
+    7: ApprovalsPanel,
+    8: SitePanel,
+    9: HandoverWorksPanel,
+    10: ServicePanel,
   }
   const Cmp = panels[viewStage] || LeadPanel
   return (
@@ -199,7 +198,7 @@ function StagePanel({ opp, app, userName, viewStage, onIssued }) {
 
 function LeadPanel({ opp, app }) {
   const estimators = estimatorChoices(app.users, app.unit.id)
-  const sales = app.users.filter((u) => (u.roles.includes('SLS') || u.roles.includes('SS')) && u.unitIds.includes(app.unit.id))
+  const sales = app.users.filter((u) => (u.roles.includes('BDM') || u.roles.includes('DBD')) && u.unitIds.includes(app.unit.id))
   const [form, setForm] = useState(() => {
     const base = formFromOpportunity(opp)
     if (!base.estimatorId && estimators[0]) base.estimatorId = estimators[0].id
@@ -244,8 +243,8 @@ function LeadPanel({ opp, app }) {
     <div className="card card-pad">
       <h2>Lead pack</h2>
       <p className="sub">
-        {opp.stage === 1
-          ? 'Fill every required field, then save. A complete lead moves to estimation. You can return here from the stepper later.'
+        {opp.stage === 2
+          ? 'Complete qualification. A Qualified lead with an estimator assigned can move to site inspection. Nurture and Disqualified stay here.'
           : 'This lead has already moved on. You can still review and update the details.'}
       </p>
       <LeadForm
@@ -255,23 +254,100 @@ function LeadPanel({ opp, app }) {
         estimators={estimators}
         sales={sales}
         referrers={app.referrers}
+        campaigns={app.campaigns || []}
         user={app.user}
       />
       {errorList.length ? (
         <div className="alert danger" style={{ marginTop: 16 }}>
-          Fix {errorList.length} {errorList.length === 1 ? 'field' : 'fields'} before this lead can move to estimation.
+          Fix {errorList.length} {errorList.length === 1 ? 'field' : 'fields'} before this lead can move to inspection.
           <ul style={{ margin: '8px 0 0', paddingLeft: 18 }}>
             {[...new Set(errorList)].map((msg) => <li key={msg}>{msg}</li>)}
           </ul>
         </div>
-      ) : opp.stage === 1 ? (
-        <div className="alert info" style={{ marginTop: 16 }}>Required fields must be complete to leave Lead.</div>
+      ) : opp.stage === 2 ? (
+        <div className="alert info" style={{ marginTop: 16 }}>Required qualification fields must be complete to leave Lead capture.</div>
       ) : null}
       <div style={{ marginTop: 16 }}>
+        <FileUpload
+          files={(opp.documents || []).filter((d) => d.stage === 2 || d.type === 'energy_bill' || d.type === 'lead')}
+          userId={app.user.id}
+          stage={2}
+          type="lead"
+          title="Lead evidence"
+          hint="Bills, photos, emails or other intake documents."
+          onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: r.kind === 'photo' ? 'photo' : 'lead', stage: 2 })))}
+          onRemove={(docId) => app.removeDocument(opp.id, docId)}
+        />
+      </div>
+      <div style={{ marginTop: 16 }}>
         <button className="btn btn-primary" onClick={savePack}>
-          {opp.stage === 1 ? 'Save and continue to estimation' : 'Save lead details'}
+          {opp.stage === 2 ? 'Save and continue to inspection' : 'Save lead details'}
         </button>
       </div>
+    </div>
+  )
+}
+
+function EngagementPanel({ opp, app }) {
+  const insp = opp.inspection || {}
+  const [meeting, setMeeting] = useState({ attendees: '', outcome: '', nextStep: '' })
+  const toggle = (key) => app.updateOpportunity(opp.id, { inspection: { ...insp, [key]: !insp[key] } }, 'Updated site pack')
+  return (
+    <div className="card card-pad">
+      <h2>Engagement & site inspection</h2>
+      <p className="sub">Record meetings, then complete the site pack. Inspection is not complete until photos, drawings, measurements and constraints are captured. Site Ops input can be requested here.</p>
+      <h3>Meetings</h3>
+      {(opp.meetings || []).map((m) => (
+        <div className="list-item" key={m.id}>
+          <div>
+            <div className="row-title">{m.attendees}</div>
+            <div className="row-meta">{m.outcome} · Next: {m.nextStep}</div>
+          </div>
+        </div>
+      ))}
+      <div className="form-grid">
+        <Field label="Attendees"><input value={meeting.attendees} onChange={(e) => setMeeting({ ...meeting, attendees: e.target.value })} /></Field>
+        <Field label="Outcome"><input value={meeting.outcome} onChange={(e) => setMeeting({ ...meeting, outcome: e.target.value })} /></Field>
+        <Field label="Next step" className="span-2"><input value={meeting.nextStep} onChange={(e) => setMeeting({ ...meeting, nextStep: e.target.value })} /></Field>
+      </div>
+      <button
+        className="btn btn-ghost"
+        style={{ marginTop: 8 }}
+        disabled={!meeting.attendees}
+        onClick={() => {
+          app.updateOpportunity(opp.id, { meetings: [{ id: uid('mtg'), at: new Date().toISOString(), ...meeting }, ...(opp.meetings || [])] }, 'Logged meeting')
+          setMeeting({ attendees: '', outcome: '', nextStep: '' })
+        }}
+      >
+        Save meeting
+      </button>
+      <h3 style={{ marginTop: 24 }}>Site inspection pack</h3>
+      <p className="sub">Upload site photos and drawings. Checklists complete automatically when files are attached.</p>
+      <FileUpload
+        files={(opp.documents || []).filter((d) => d.stage === 3 || d.type === 'site_photo' || d.type === 'drawing')}
+        userId={app.user.id}
+        stage={3}
+        type="site_photo"
+        title="Site photos"
+        hint="Mandatory photos of access, electrical conditions and constraints."
+        accept="image/*"
+        onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'site_photo', kind: 'photo', stage: 3 })))}
+        onRemove={(docId) => app.removeDocument(opp.id, docId)}
+      />
+      <FileUpload
+        files={(opp.documents || []).filter((d) => d.type === 'drawing' || d.type === 'survey')}
+        userId={app.user.id}
+        stage={3}
+        type="drawing"
+        title="Drawings / survey"
+        hint="Plans, sketches, design outputs or survey PDFs."
+        onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'drawing', stage: 3 })))}
+        onRemove={(docId) => app.removeDocument(opp.id, docId)}
+      />
+      <label className="check"><input type="checkbox" checked={!!insp.measurements} onChange={() => toggle('measurements')} /> Measurements recorded</label>
+      <Field label="Hazards / constraints">
+        <textarea rows={3} defaultValue={insp.constraints} onBlur={(e) => app.updateOpportunity(opp.id, { inspection: { ...insp, constraints: e.target.value } }, 'Updated constraints')} />
+      </Field>
     </div>
   )
 }
@@ -314,7 +390,7 @@ function EstimatePanel({ opp, app, onIssued }) {
       <p className="sub">
         {variationReprice
           ? 'Update cost and price for the variation, then issue the revised pack to sales.'
-          : 'Enter a price on the recommended option, then issue to sales. That creates the proposal and moves the job to Proposal.'}
+          : 'Enter quantity, cost, sell price and target margin, then issue to BDM/Sales. Incomplete packs should be returned with missing items listed.'}
       </p>
       {error ? <div className="alert danger">{error}</div> : null}
       {options.map((opt, i) => (
@@ -333,7 +409,7 @@ function EstimatePanel({ opp, app, onIssued }) {
               <Field label="Cost (ex GST)"><NumberInput value={opt.costEx} disabled={!canEdit} onChange={(v) => update(i, 'costEx', v)} /></Field>
             ) : null}
             <Field label="Price (ex GST)"><NumberInput value={opt.priceEx} disabled={!canEdit} onChange={(v) => update(i, 'priceEx', v)} /></Field>
-            {showCost ? <Field label="Margin"><input value={pct(opt.margin)} readOnly /></Field> : null}
+            {showCost ? <Field label="Target margin %"><input value={pct(opt.margin)} readOnly /></Field> : null}
             <Field label="Annual saving"><NumberInput value={opt.annualSaving} disabled={!canEdit} onChange={(v) => update(i, 'annualSaving', v)} /></Field>
             <Field label="Payback (years)"><NumberInput step="0.1" value={opt.paybackYears} disabled={!canEdit} onChange={(v) => update(i, 'paybackYears', v)} /></Field>
           </div>
@@ -364,8 +440,9 @@ function ProposalPanel({ opp, app }) {
   const variationPresent = opp.variationPending && (opp.variations || [])[0]?.status === 'priced'
 
   return (
+    <>
     <div className="card card-pad">
-      <h2>Proposal & engagement</h2>
+      <h2>Proposal, negotiation & acceptance</h2>
       <p className="sub">
         {variationPresent
           ? 'A revised proposal was created from the variation price. Present it to the customer, then mark it presented.'
@@ -388,6 +465,9 @@ function ProposalPanel({ opp, app }) {
       </Field>
       <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => app.updateOpportunity(opp.id, { feedback }, 'Captured feedback')}>Save feedback</button>
     </div>
+    <div style={{ height: 16 }} />
+    <ClosurePanel opp={opp} app={app} />
+    </>
   )
 }
 
@@ -404,7 +484,7 @@ function ClosurePanel({ opp, app }) {
 
   return (
     <div className="card card-pad">
-      <h2>Sales closure</h2>
+      <h2>Negotiation & acceptance</h2>
       <p className="sub">Offers at or above the {pct(floor, 0)} floor can be issued. Below-floor pricing routes to the Director. Acceptance creates the 20% billing request — not a tax invoice.</p>
       <p>Offer {money(option?.priceEx)} ex GST ({money(incGst(option?.priceEx))} inc) · margin {pct(margin)}</p>
       {low ? <div className="alert warning">Below the {pct(floor, 0)} floor. Director approval is required before issue.</div> : <div className="alert success">Within authority — salesperson may issue.</div>}
@@ -430,8 +510,21 @@ function ClosurePanel({ opp, app }) {
         }}>Issue final offer</button>
       ) : null}
       <div style={{ marginTop: 20 }}>
-        <Field label="Signed acceptance file name"><input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="Signed-offer.pdf" /></Field>
-        <button className="btn btn-primary" style={{ marginTop: 10 }} disabled={!doc} onClick={() => app.recordAcceptance(opp.id, doc)}>Record acceptance</button>
+        <FileUpload
+          files={(opp.documents || []).filter((d) => d.type === 'acceptance')}
+          userId={app.user.id}
+          stage={5}
+          type="acceptance"
+          title="Signed acceptance"
+          hint="Upload the signed offer or contract. Then record acceptance."
+          onAdd={(records) => {
+            app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'acceptance', stage: 5 })))
+            setDoc(records[0]?.name || '')
+          }}
+          onRemove={(docId) => app.removeDocument(opp.id, docId)}
+        />
+        <Field label="File name (if already stored)"><input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="Signed-offer.pdf" /></Field>
+        <button className="btn btn-primary" style={{ marginTop: 10 }} disabled={!doc && !(opp.documents || []).some((d) => d.type === 'acceptance')} onClick={() => app.recordAcceptance(opp.id, doc || (opp.documents || []).find((d) => d.type === 'acceptance')?.name || 'Signed-acceptance.pdf')}>Record acceptance</button>
       </div>
     </div>
   )
@@ -454,7 +547,10 @@ function VariationGuide({ opp, app, onOpenEstimate, onOpenProposal, onProgress }
       <div className="list-stack">
         {VARIATION_STEPS.map((step) => {
           const status = variation?.status || 're-estimate'
-          const done = (step.key === 're-estimate' && ['priced', 'presented', 'accepted'].includes(status))
+          const done = (step.key === 'identify' && ['identify', 're-estimate', 'priced', 'approve', 'presented', 'accepted'].includes(status) && status !== 'identify')
+            || (step.key === 're-estimate' && ['priced', 'approve', 'presented', 'accepted'].includes(status))
+            || (step.key === 'approve' && ['approve', 'presented', 'accepted'].includes(status) && status !== 'approve' && status !== 'priced')
+            || (step.key === 'approve' && status === 'presented')
             || (step.key === 'presented' && ['presented', 'accepted'].includes(status))
             || (step.key === 'accepted' && status === 'accepted')
           const current = next?.key === step.key
@@ -470,6 +566,11 @@ function VariationGuide({ opp, app, onOpenEstimate, onOpenProposal, onProgress }
         })}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+        {next?.key === 'identify' ? (
+          canSignSite(app.user) || canManageApprovals(app.user) ? (
+            <button className="btn btn-primary btn-sm" onClick={() => app.progressVariation(opp.id, 're-estimate')}>Mark identified</button>
+          ) : <span className="row-meta">Site Ops records the variation cause and evidence.</span>
+        ) : null}
         {next?.key === 're-estimate' ? (
           <>
             <button
@@ -495,6 +596,11 @@ function VariationGuide({ opp, app, onOpenEstimate, onOpenProposal, onProgress }
               </button>
             ) : <span className="row-meta">Sign in as {estimatorName} to complete the re-estimate.</span>}
           </>
+        ) : null}
+        {next?.key === 'approve' ? (
+          canApprovePricing(app.user) || canIssueProposal(app.user) ? (
+            <button className="btn btn-primary btn-sm" onClick={() => app.progressVariation(opp.id, 'presented')}>Record internal / customer approval</button>
+          ) : <span className="row-meta">Delegated authority must approve before execution.</span>
         ) : null}
         {next?.key === 'presented' ? (
           <>
@@ -533,11 +639,57 @@ function VariationGuide({ opp, app, onOpenEstimate, onOpenProposal, onProgress }
   )
 }
 
+function JobSetupPanel({ opp, app }) {
+  const job = opp.jobBaseline || {}
+  const can = canSetupJob(app.user)
+  const delivery = app.users.filter((u) => u.roles.includes('SOM') && u.unitIds.includes(app.unit.id))
+  return (
+    <div className="card card-pad">
+      <h2>Job setup & cost baseline</h2>
+      <p className="sub">Business Operations converts the accepted offer to a job: carry forward the quote, lock the budget, set cost categories and assign Site Ops.</p>
+      <label className="check">
+        <input type="checkbox" checked={!!job.budgetConfirmed} disabled={!can} onChange={(e) => app.updateOpportunity(opp.id, { jobBaseline: { ...job, budgetConfirmed: e.target.checked } }, 'Updated job baseline')} />
+        Approved budget / cost baseline confirmed
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={!!job.costCategories} disabled={!can} onChange={(e) => app.updateOpportunity(opp.id, { jobBaseline: { ...job, costCategories: e.target.checked } }, 'Updated cost categories')} />
+        Cost categories created
+      </label>
+      <div className="form-grid" style={{ marginTop: 12 }}>
+        <Field label="Key dates">
+          <input defaultValue={job.keyDates} disabled={!can} onBlur={(e) => app.updateOpportunity(opp.id, { jobBaseline: { ...job, keyDates: e.target.value } }, 'Updated key dates')} />
+        </Field>
+        <Field label="Delivery owner">
+          <select
+            value={opp.owners?.deliveryId || ''}
+            disabled={!can}
+            onChange={(e) => app.updateOpportunity(opp.id, { owners: { ...opp.owners, deliveryId: e.target.value } }, 'Assigned delivery owner')}
+          >
+            <option value="">Select Site Operations</option>
+            {delivery.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </Field>
+      </div>
+      <FileUpload
+        files={(opp.documents || []).filter((d) => d.stage === 6 || d.type === 'contract')}
+        userId={app.user.id}
+        stage={6}
+        type="contract"
+        title="Contract pack"
+        hint="Accepted quote, contract and baseline attachments."
+        onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'contract', stage: 6 })))}
+        onRemove={(docId) => app.removeDocument(opp.id, docId)}
+      />
+    </div>
+  )
+}
+
 function ApprovalsPanel({ opp, app }) {
   const can = canManageApprovals(app.user)
   return (
+    <>
     <div className="card card-pad">
-      <h2>External approvals</h2>
+      <h2>Approvals & procurement</h2>
       <p className="sub">Each approval is its own record. Delivery cannot start until every mandatory item is Approved or authorised Not Required.</p>
       {(opp.approvals || []).map((a) => (
         <div className="list-item" key={a.id}>
@@ -552,19 +704,22 @@ function ApprovalsPanel({ opp, app }) {
           ) : <Badge tone={a.status === 'Approved' || a.status === 'Not Required' ? 'success' : a.status === 'Rejected' ? 'danger' : 'warning'}>{a.status}</Badge>}
         </div>
       ))}
-      {hasRole(app.user, 'SLS', 'SS', 'DIR', 'EST') ? (
+      {hasRole(app.user, 'BDM', 'DBD', 'DIR', 'EST', 'SOM', 'BOP') ? (
         <div style={{ marginTop: 16 }}>
           <VariationBox opp={opp} app={app} />
         </div>
       ) : null}
     </div>
+      <div style={{ height: 16 }} />
+      <ProcurementPanel opp={opp} app={app} />
+    </>
   )
 }
 
 function VariationBox({ opp, app }) {
   const [reason, setReason] = useState('')
   const [open, setOpen] = useState(false)
-  if (opp.stage < 4) return null
+  if (opp.stage < 6) return null
   if (opp.variationPending) {
     return <p className="lede">A variation is already open. Complete the three steps above before raising another.</p>
   }
@@ -624,8 +779,8 @@ function SitePanel({ opp, app }) {
   const sw = opp.siteWorks || {}
   return (
     <div className="card card-pad">
-      <h2>Site works</h2>
-      <p className="sub">Book the window, then sign off each sub-stage. Commissioning creates the final 40% billing request and enables the certificate.</p>
+      <h2>Site planning & delivery</h2>
+      <p className="sub">Pre-start, materials and installation. Testing and handover are the next block. Variations freeze progression until reconciled.</p>
       <div className="form-grid">
         <Field label="Install start"><input type="date" defaultValue={sw.installWindowStart} onBlur={(e) => app.updateSiteWorks(opp.id, { installWindowStart: e.target.value })} /></Field>
         <Field label="Install end"><input type="date" defaultValue={sw.installWindowEnd} onBlur={(e) => app.updateSiteWorks(opp.id, { installWindowEnd: e.target.value })} /></Field>
@@ -636,16 +791,27 @@ function SitePanel({ opp, app }) {
         {SITE_SUBSTAGES.map((s) => {
           const rec = (sw.substages || []).find((x) => x.key === s.key) || { status: 'not_started' }
           return (
-            <div className="substage" key={s.key}>
+            <div className="substage" key={s.key} style={{ flexWrap: 'wrap' }}>
               <Badge tone={rec.status === 'signed_off' ? 'success' : rec.status === 'failed' ? 'danger' : rec.status === 'in_progress' ? 'warning' : 'neutral'}>{s.key}</Badge>
               <div>
                 <div className="row-title">{s.label}</div>
                 <div className="row-meta">{s.hint}</div>
+                <FileUpload
+                  compact
+                  files={(opp.documents || []).filter((d) => d.label === s.key)}
+                  userId={app.user.id}
+                  stage={8}
+                  type="site_evidence"
+                  label={s.key}
+                  accept="image/*,.pdf"
+                  onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'site_evidence', stage: 8, label: s.key })))}
+                  onRemove={(docId) => app.removeDocument(opp.id, docId)}
+                />
               </div>
               {rec.status === 'signed_off' ? <span className="row-meta">Signed {formatDate(rec.signedOffAt)}</span> : can ? (
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button className="btn btn-sm btn-primary" onClick={() => app.signSubstage(opp.id, s.key, { photos: [{ name: `${s.key}.jpg`, at: new Date().toISOString() }] })}>Sign off</button>
-                  {s.key === '7e' ? <button className="btn btn-sm btn-danger" onClick={() => app.signSubstage(opp.id, s.key, { failed: true, defects: 'Failed commissioning test' })}>Fail</button> : null}
+                  {s.key === '8c' ? <button className="btn btn-sm btn-danger" onClick={() => app.signSubstage(opp.id, s.key, { failed: true, defects: 'Installation blocked' })}>Fail</button> : null}
                 </div>
               ) : <span className="row-meta">{rec.status}</span>}
             </div>
@@ -656,12 +822,95 @@ function SitePanel({ opp, app }) {
   )
 }
 
+function HandoverWorksPanel({ opp, app }) {
+  const can = canSignSite(app.user)
+  const items = opp.siteWorks?.handover?.length ? opp.siteWorks.handover : HANDOVER_SUBSTAGES.map((s) => ({ ...s, status: 'not_started' }))
+  return (
+    <div className="card card-pad">
+      <h2>Test, commission & handover</h2>
+      <p className="sub">Operational completion is separate from invoices and payments. Commissioning creates the final billing request.</p>
+      {HANDOVER_SUBSTAGES.map((s) => {
+        const rec = items.find((x) => x.key === s.key) || { status: 'not_started' }
+        return (
+            <div className="substage" key={s.key} style={{ flexWrap: 'wrap' }}>
+              <Badge tone={rec.status === 'signed_off' ? 'success' : rec.status === 'failed' ? 'danger' : 'neutral'}>{s.key}</Badge>
+              <div>
+                <div className="row-title">{s.label}</div>
+                <div className="row-meta">{s.hint}</div>
+                <FileUpload
+                  compact
+                  files={(opp.documents || []).filter((d) => d.label === s.key)}
+                  userId={app.user.id}
+                  stage={9}
+                  type="handover"
+                  label={s.key}
+                  onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'handover', stage: 9, label: s.key })))}
+                  onRemove={(docId) => app.removeDocument(opp.id, docId)}
+                />
+              </div>
+              {rec.status === 'signed_off' ? <span className="row-meta">Signed {formatDate(rec.signedOffAt)}</span> : can ? (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-sm btn-primary" onClick={() => app.signSubstage(opp.id, s.key, { photos: [{ name: `${s.key}.jpg`, at: new Date().toISOString() }] })}>Sign off</button>
+                {s.key === '9b' ? <button className="btn btn-sm btn-danger" onClick={() => app.signSubstage(opp.id, s.key, { failed: true, defects: 'Failed commissioning test' })}>Fail</button> : null}
+              </div>
+            ) : <span className="row-meta">{rec.status}</span>}
+          </div>
+        )
+      })}
+      {opp.operationalComplete ? <div className="alert success" style={{ marginTop: 12 }}>Operationally complete.</div> : null}
+    </div>
+  )
+}
+
+function ServicePanel({ opp, app }) {
+  const svc = opp.service || {}
+  return (
+    <>
+      <BillingPanel opp={opp} app={app} />
+      <div style={{ height: 16 }} />
+      <div className="card card-pad">
+        <h2>Post-work service, reviews & referrals</h2>
+        <p className="sub">BDM owns the customer relationship. Accounts confirms financial completion separately.</p>
+        <label className="check">
+          <input type="checkbox" checked={!!svc.reviewRequested} onChange={(e) => app.updateOpportunity(opp.id, { service: { ...svc, reviewRequested: e.target.checked } }, 'Updated service')} />
+          Review / feedback requested
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={!!svc.referralCaptured} onChange={(e) => app.updateOpportunity(opp.id, { service: { ...svc, referralCaptured: e.target.checked } }, 'Updated referral')} />
+          Referral or repeat opportunity captured
+        </label>
+        <Field label="Service actions">
+          <textarea rows={3} defaultValue={svc.actions} onBlur={(e) => app.updateOpportunity(opp.id, { service: { ...svc, actions: e.target.value } }, 'Updated service actions')} />
+        </Field>
+        <FileUpload
+          files={(opp.documents || []).filter((d) => d.stage === 10 || d.type === 'service')}
+          userId={app.user.id}
+          stage={10}
+          type="service"
+          title="Service evidence"
+          hint="Photos, review screenshots or referral notes."
+          onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'service', stage: 10 })))}
+          onRemove={(docId) => app.removeDocument(opp.id, docId)}
+        />
+        {hasRole(app.user, 'ACC', 'DIR', 'ADM') ? (
+          <label className="check" style={{ marginTop: 12 }}>
+            <input type="checkbox" checked={!!opp.financialComplete} onChange={(e) => app.updateOpportunity(opp.id, { financialComplete: e.target.checked }, 'Financial completion')} />
+            Financial completion (billing, payments and actuals reconciled)
+          </label>
+        ) : (
+          <p className="lede" style={{ marginTop: 12 }}>{opp.financialComplete ? 'Financially complete.' : 'Financial completion is with Accounts.'}</p>
+        )}
+      </div>
+    </>
+  )
+}
+
 function BillingPanel({ opp, app }) {
   const can = canManageBilling(app.user)
   const comm = commissionFor(opp, app.unit.commissionTiers)
   return (
     <div className="card card-pad">
-      <h2>Billing, rebates & commission</h2>
+      <h2>Financials (not a separate closure module)</h2>
       <p className="sub">This system creates billing requests. Tax invoice numbers and payment status are recorded from accounting — they are not invented here.</p>
       {(opp.billingRequests || []).map((b) => (
         <div className="list-item" key={b.id}>
@@ -703,8 +952,8 @@ function HandoverPanel({ opp, app }) {
   const billsPaid = (opp.billingRequests || []).every((b) => b.paymentStatus === 'paid' || b.invoiceNumber)
   return (
     <div className="card card-pad">
-      <h2>Closure & handover</h2>
-      <p className="sub">Confirm the job is complete, capture warranty contacts for a future after-sales module, then mark delivered.</p>
+      <h2>Handover notes</h2>
+      <p className="sub">Warranty and follow-up stay on the job. There is no separate closure module.</p>
       <label className="check"><input type="checkbox" defaultChecked={billsPaid} readOnly /> Billing requests have accounting references</label>
       <label className="check"><input type="checkbox" defaultChecked={(opp.rebates || []).every((r) => r.status !== 'Not lodged')} readOnly /> Rebates lodged or not applicable</label>
       <label className="check"><input type="checkbox" defaultChecked={(opp.documents || []).length > 0} readOnly /> Documents archived</label>
