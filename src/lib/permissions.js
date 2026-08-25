@@ -1,4 +1,4 @@
-import { isSalesPhase } from './workflow'
+import { isSalesPhase, workStage } from './workflow'
 
 export function hasRole(user, ...codes) {
   if (!user) return false
@@ -12,24 +12,24 @@ export function canAccessUnit(user, unitId) {
 }
 
 export function canSeeCost(user) {
-  return hasRole(user, 'EST', 'SLS', 'SS', 'DIR', 'ADM', 'ACC', 'SOM')
+  return hasRole(user, 'EST', 'BDM', 'DBD', 'DIR', 'ADM', 'ACC', 'SOM', 'BOP')
 }
 
 export function canSeeFinancials(user) {
-  return hasRole(user, 'ACC', 'DIR', 'ADM', 'SS')
+  return hasRole(user, 'ACC', 'DIR', 'ADM', 'BDM', 'DBD')
 }
 
 export function canViewOpportunity(user, opp) {
   if (!user || !opp) return false
-  if (hasRole(user, 'DIR', 'ADM')) return true
+  if (hasRole(user, 'DIR', 'ADM', 'DBD')) return true
   if (hasRole(user, 'REF')) return opp.referrerId === user.referrerId
-  if (hasRole(user, 'SS') && isSalesPhase(opp.stage)) return true
-  if (hasRole(user, 'SOM') && opp.stage >= 5) return true
+  if (hasRole(user, 'BDM') && isSalesPhase(opp.stage)) return true
+  if (hasRole(user, 'SOM') && opp.stage >= 6) return true
   const owners = opp.owners || {}
   const mine = [owners.leadId, owners.estimatorId, owners.salespersonId, owners.deliveryId].includes(user.id)
   if (mine) return true
-  if (hasRole(user, 'BOP', 'CC', 'ACC') && opp.stage >= 4) return true
-  if (hasRole(user, 'LG', 'EST', 'SLS')) return mine || hasRole(user, 'SS')
+  if (hasRole(user, 'BOP', 'ACC') && opp.stage >= 5) return true
+  if (hasRole(user, 'EST')) return mine
   return false
 }
 
@@ -38,31 +38,31 @@ export function navFor(user) {
     return [
       { to: '/', label: 'Home' },
       { to: '/pipeline', label: 'My leads' },
-     
     ]
   }
 
   const items = [
     { to: '/', label: 'Home' },
     { to: '/pipeline', label: 'Pipeline' },
-  
-  
   ]
 
-  if (hasRole(user, 'BOP', 'SOM', 'CC', 'DIR', 'ADM', 'SS')) {
+  if (hasRole(user, 'BDM', 'DBD', 'DIR', 'ADM')) {
+    items.push({ to: '/marketing', label: 'Marketing' })
+  }
+  if (hasRole(user, 'BOP', 'SOM', 'DIR', 'ADM', 'BDM', 'DBD')) {
     items.push({ to: '/approvals', label: 'Approvals' })
   }
   if (hasRole(user, 'BOP', 'SOM', 'ACC', 'DIR', 'ADM')) {
-    items.push({ to: '/procurement', label: 'Materials' })
+    items.push({ to: '/procurement', label: 'Procurement' })
   }
-  if (hasRole(user, 'EST', 'SLS', 'SS', 'DIR', 'ADM')) {
+  if (hasRole(user, 'EST', 'BDM', 'DBD', 'DIR', 'ADM')) {
     items.push({ to: '/quotes', label: 'Quotes' })
   }
-  if (hasRole(user, 'EST', 'SLS', 'SS', 'DIR', 'ADM')) {
+  if (hasRole(user, 'EST', 'BDM', 'DBD', 'DIR', 'ADM', 'BOP', 'ACC')) {
     items.push({ to: '/costs', label: 'Costs' })
   }
-  if (hasRole(user, 'ACC', 'DIR', 'ADM', 'SOM')) {
-    items.push({ to: '/billing', label: 'Billing' })
+  if (hasRole(user, 'ACC', 'DIR', 'ADM', 'SOM', 'BOP')) {
+    items.push({ to: '/billing', label: 'Financials' })
   }
 
   if (!hasRole(user, 'REF')) {
@@ -75,23 +75,31 @@ export function navFor(user) {
 }
 
 export function canCreateLead(user) {
-  return hasRole(user, 'LG', 'SLS', 'SS', 'DIR', 'ADM', 'REF')
+  return hasRole(user, 'BDM', 'DBD', 'DIR', 'ADM', 'REF')
+}
+
+export function canManageCampaigns(user) {
+  return hasRole(user, 'BDM', 'DBD', 'DIR', 'ADM')
+}
+
+export function canApproveCampaign(user) {
+  return hasRole(user, 'DIR', 'DBD', 'ADM')
 }
 
 export function canEditEstimate(user) {
-  return hasRole(user, 'EST', 'SS', 'DIR', 'ADM')
+  return hasRole(user, 'EST', 'DIR', 'ADM')
 }
 
 export function canIssueProposal(user) {
-  return hasRole(user, 'SLS', 'SS', 'DIR', 'ADM')
+  return hasRole(user, 'BDM', 'DBD', 'DIR', 'ADM')
 }
 
 export function canApprovePricing(user) {
-  return hasRole(user, 'DIR')
+  return hasRole(user, 'DIR', 'DBD')
 }
 
 export function canManageApprovals(user) {
-  return hasRole(user, 'BOP', 'CC', 'SOM', 'DIR', 'ADM')
+  return hasRole(user, 'BOP', 'SOM', 'DIR', 'ADM')
 }
 
 export function canManageProcurement(user) {
@@ -99,7 +107,11 @@ export function canManageProcurement(user) {
 }
 
 export function canSignSite(user) {
-  return hasRole(user, 'SOM', 'CC', 'DIR', 'ADM')
+  return hasRole(user, 'SOM', 'DIR', 'ADM')
+}
+
+export function canSetupJob(user) {
+  return hasRole(user, 'BOP', 'DIR', 'ADM')
 }
 
 export function canManageBilling(user) {
@@ -112,17 +124,17 @@ export function canAdmin(user) {
 
 export function canAdvance(user, opp) {
   if (!user || !opp) return false
-  if (hasRole(user, 'DIR', 'ADM', 'SS')) return true
+  if (hasRole(user, 'DIR', 'ADM', 'DBD')) return true
   const map = {
-    1: ['LG', 'SLS', 'SS'],
-    2: ['EST', 'SS'],
-    3: ['SLS', 'SS'],
-    4: ['SLS', 'SS'],
-    5: ['BOP', 'SOM', 'CC'],
-    6: ['BOP', 'SOM'],
-    7: ['SOM', 'CC'],
-    8: ['ACC', 'SOM'],
-    9: ['DIR', 'SOM'],
+    2: ['BDM'],
+    3: ['BDM', 'SOM'],
+    4: ['EST'],
+    5: ['BDM'],
+    6: ['BOP'],
+    7: ['BOP', 'SOM'],
+    8: ['SOM'],
+    9: ['SOM'],
+    10: ['BDM', 'ACC', 'SOM'],
   }
-  return hasRole(user, ...(map[opp.stage] || []))
+  return hasRole(user, ...(map[workStage(opp.stage)] || []))
 }

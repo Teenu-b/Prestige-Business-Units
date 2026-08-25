@@ -1,14 +1,17 @@
 import { STAGES } from '../data/constants'
+import { workStage } from '../lib/workflow'
 
 export default function StageStepper({ stage, viewStage, onSelect }) {
+  const current = workStage(stage)
+  const viewing = workStage(viewStage || stage)
   return (
     <div className="stepper" aria-label="Opportunity stages">
-      {STAGES.map((s) => {
-        const reached = s.id <= stage
+      {STAGES.map((s, i) => {
+        const reached = s.id <= current
         const state = [
-          s.id < stage ? 'done' : '',
-          s.id === stage ? 'current' : '',
-          viewStage === s.id && s.id !== stage ? 'viewing' : '',
+          s.id < current ? 'done' : '',
+          s.id === current ? 'current' : '',
+          viewing === s.id && s.id !== current ? 'viewing' : '',
           reached ? 'clickable' : '',
         ].filter(Boolean).join(' ')
         return (
@@ -18,9 +21,9 @@ export default function StageStepper({ stage, viewStage, onSelect }) {
             className={`step ${state}`}
             disabled={!reached}
             onClick={() => reached && onSelect?.(s.id)}
-            aria-current={viewStage === s.id ? 'step' : undefined}
+            aria-current={viewing === s.id ? 'step' : undefined}
           >
-            <div className="step-dot">{s.id < stage ? '✓' : s.id}</div>
+            <div className="step-dot">{s.id < current ? '✓' : i + 1}</div>
             <div className="step-label">{s.short}</div>
           </button>
         )

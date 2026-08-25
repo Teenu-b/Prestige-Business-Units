@@ -1,5 +1,5 @@
 import { Field } from './ui'
-import { INVOLVEMENT_TIERS, JURISDICTIONS, LEAD_SOURCES } from '../data/constants'
+import { INVOLVEMENT_TIERS, JURISDICTIONS, LEAD_SOURCES, QUALIFICATION } from '../data/constants'
 import { hasRole } from '../lib/permissions'
 
 export function emptyLeadForm(user) {
@@ -31,6 +31,13 @@ export function emptyLeadForm(user) {
     estimatorId: '',
     salespersonId: '',
     notes: '',
+    campaignId: '',
+    qualification: 'nurture',
+    nextAction: '',
+    nextActionDue: '',
+    authority: '',
+    timing: '',
+    opportunityValue: '',
   }
 }
 
@@ -63,6 +70,13 @@ export function formFromOpportunity(opp) {
     estimatorId: opp.owners?.estimatorId || '',
     salespersonId: opp.owners?.salespersonId || '',
     notes: opp.notes || '',
+    campaignId: opp.campaignId || '',
+    qualification: opp.qualification || 'nurture',
+    nextAction: opp.nextAction || '',
+    nextActionDue: (opp.nextActionDue || '').slice(0, 10),
+    authority: opp.authority || '',
+    timing: opp.timing || '',
+    opportunityValue: opp.opportunityValue || '',
   }
 }
 
@@ -103,6 +117,13 @@ export function payloadFromLeadForm(form) {
     salespersonId: form.salespersonId,
     documentName: form.documentName.trim(),
     notes: form.notes.trim(),
+    campaignId: form.campaignId,
+    qualification: form.qualification,
+    nextAction: form.nextAction.trim(),
+    nextActionDue: form.nextActionDue,
+    authority: form.authority.trim(),
+    timing: form.timing.trim(),
+    opportunityValue: form.opportunityValue,
   }
 }
 
@@ -110,7 +131,7 @@ export function estimatorChoices(users, unitId) {
   const list = users.filter((u) => u.roles.includes('EST'))
   if (list.length) return list
   return users.filter((u) => (
-    u.roles.some((r) => r === 'SS' || r === 'DIR' || r === 'ADM')
+    u.roles.some((r) => r === 'BDM' || r === 'DIR' || r === 'ADM')
     && (!unitId || u.unitIds.includes(unitId))
   ))
 }
@@ -138,11 +159,16 @@ export function validateLeadForm(form) {
   }
   if (!form.leadSource) errors.leadSource = 'Select a lead source.'
   if (form.leadSource === 'referrer' && blank(form.referrerId)) errors.referrerId = 'Select the referrer who introduced this lead.'
-  if (blank(form.estimatorId)) errors.estimatorId = 'Assign an estimator to move to estimation.'
+  if (blank(form.estimatorId)) errors.estimatorId = 'Assign an estimator to leave qualification.'
+  if (!form.qualification) errors.qualification = 'Set qualification outcome.'
+  if (form.qualification === 'qualified') {
+    if (blank(form.nextAction)) errors.nextAction = 'Set the next action.'
+    if (blank(form.nextActionDue)) errors.nextActionDue = 'Set a due date.'
+  }
   return errors
 }
 
-export default function LeadForm({ form, set, errors = {}, estimators, sales, referrers, user }) {
+export default function LeadForm({ form, set, errors = {}, estimators, sales, referrers, user, campaigns = [] }) {
   const err = (key) => errors[key]
   return (
     <>
@@ -185,6 +211,28 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
       </div>
 
       <div className="section">
+        <h3>Qualification</h3>
+        <div className="form-grid">
+          <Field label="Campaign" hint="optional — referrer, inbound or outreach is fine">
+            <select value={form.campaignId} onChange={(e) => set('campaignId', e.target.value)}>
+              <option value="">None / exception</option>
+              {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Qualification" error={err('qualification')}>
+            <select value={form.qualification} onChange={(e) => set('qualification', e.target.value)}>
+              {QUALIFICATION.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Authority / decision-maker"><input value={form.authority} onChange={(e) => set('authority', e.target.value)} /></Field>
+          <Field label="Timing"><input value={form.timing} onChange={(e) => set('timing', e.target.value)} /></Field>
+          <Field label="Opportunity value"><input value={form.opportunityValue} onChange={(e) => set('opportunityValue', e.target.value)} /></Field>
+          <Field label="Next action" error={err('nextAction')}><input value={form.nextAction} onChange={(e) => set('nextAction', e.target.value)} /></Field>
+          <Field label="Due date" error={err('nextActionDue')}><input type="date" value={form.nextActionDue} onChange={(e) => set('nextActionDue', e.target.value)} /></Field>
+        </div>
+      </div>
+
+      <div className="section">
         <h3>Energy & source</h3>
         <div className="form-grid">
           <Field label="Annual usage (kWh)" hint="or tick bills on file" error={err('annualKwh')}>
@@ -217,14 +265,14 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
               </Field>
             </>
           ) : null}
-          <Field label="Assign estimator" hint="required to leave Lead" error={err('estimatorId')} className="span-2">
+          <Field label="Assign estimator" hint="required to leave qualification" error={err('estimatorId')} className="span-2">
             <select value={form.estimatorId} onChange={(e) => set('estimatorId', e.target.value)}>
               <option value="">Select estimator</option>
               {estimators.map((u) => <option key={u.id} value={u.id}>{u.name}{u.title ? ` · ${u.title}` : ''}</option>)}
             </select>
             {!estimators.length ? <span className="field-error">No estimator is set up. Add an Estimator in Admin, then return here.</span> : null}
           </Field>
-          <Field label="Salesperson">
+          <Field label="BDM / salesperson">
             <select value={form.salespersonId} onChange={(e) => set('salespersonId', e.target.value)}>
               <option value="">Later</option>
               {sales.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}

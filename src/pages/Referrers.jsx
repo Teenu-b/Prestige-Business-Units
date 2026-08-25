@@ -11,7 +11,7 @@ export default function Referrers() {
   const { referrers, opportunities, saveReferrer, user } = useApp()
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ organisation: '', contact: '', email: '', phone: '', paymentRef: '' })
-  const canEdit = canAdmin(user) || hasRole(user, 'SS', 'DIR')
+  const canEdit = canAdmin(user) || hasRole(user, 'BDM', 'DIR', 'DBD')
 
   return (
     <>
@@ -33,7 +33,7 @@ export default function Referrers() {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div>{leads.length} leads</div>
-                {hasRole(user, 'ACC', 'DIR', 'ADM', 'SS') ? <div className="row-meta">{money(earned)} calculated</div> : null}
+                {hasRole(user, 'ACC', 'DIR', 'ADM', 'BDM', 'DBD') ? <div className="row-meta">{money(earned)} calculated</div> : null}
               </div>
             </div>
           )

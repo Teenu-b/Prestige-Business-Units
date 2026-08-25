@@ -5,13 +5,14 @@ import { useApp } from '../context/AppContext'
 import { initials } from '../lib/format'
 import { hasRole, navFor } from '../lib/permissions'
 import { ROLES } from '../data/constants'
+import ErrorBoundary from './ErrorBoundary'
 
 export default function Layout() {
   const { user, unit, units, switchUnit, logout, notifications } = useApp()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [menu, setMenu] = useState(false)
-  const unread = notifications.filter((n) => !n.read).length
+  const unread = (notifications || []).filter((n) => !n.read).length
   const items = useMemo(() => navFor(user), [user])
   const roleLabel = user.roles.map((r) => ROLES[r]?.name).filter(Boolean).join(' · ')
 
@@ -25,7 +26,7 @@ export default function Layout() {
           <div className="brand-mark">P</div>
           <div>
             <div className="brand-name">Prestige</div>
-            <div className="brand-sub">Sales & delivery</div>
+            <div className="brand-sub">Lead to service</div>
           </div>
         </div>
         <nav className="nav" onClick={() => setOpen(false)}>
@@ -49,7 +50,7 @@ export default function Layout() {
             </button>
             <div className="unit-switch">
               <span>Working in</span>
-              <select value={unit.id} onChange={(e) => switchUnit(e.target.value)}>
+              <select value={unit?.id || ''} onChange={(e) => switchUnit(e.target.value)}>
                 {units.map((u) => (
                   <option key={u.id} value={u.id} disabled={u.status !== 'active' && u.id !== 'prs'}>
                     {u.name}{u.status !== 'active' ? ' (later)' : ''}
@@ -83,7 +84,9 @@ export default function Layout() {
           </div>
         </header>
         <div className="content">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </div>
     </div>
