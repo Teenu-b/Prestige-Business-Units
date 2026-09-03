@@ -43,6 +43,7 @@ export function navFor(user) {
 
   const items = [
     { to: '/', label: 'Home' },
+    { to: '/leads', label: 'Leads' },
     { to: '/pipeline', label: 'Pipeline' },
   ]
 

@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Pipeline from './pages/Pipeline'
+import Leads from './pages/Leads'
 import NewLead from './pages/NewLead'
 import Opportunity from './pages/Opportunity'
 import Referrers from './pages/Referrers'
@@ -37,6 +38,7 @@ function AppRoutes() {
       >
         <Route path="/" element={<Dashboard />} />
         <Route path="/pipeline" element={<Pipeline />} />
+        <Route path="/leads" element={<Leads />} />
         <Route path="/leads/new" element={<NewLead />} />
         <Route path="/opportunities/:id" element={<Opportunity />} />
         <Route path="/referrers" element={<Referrers />} />

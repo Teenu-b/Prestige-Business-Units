@@ -97,10 +97,11 @@ export function Modal({ title, body, children, onClose, actions, className = '' 
 }
 
 export function CustomerCell({ opp }) {
+  const typeLabel = opp?.leadType === 'residential' ? 'Residential' : opp?.leadType === 'commercial' ? 'Commercial' : ''
   return (
     <div>
       <div className="row-title">{opp?.customer?.legalName || 'Untitled'}</div>
-      <div className="row-meta">{opp?.number} · {opp?.site?.suburb} {opp?.site?.state}</div>
+      <div className="row-meta">{opp?.number} · {opp?.site?.suburb} {opp?.site?.state}{typeLabel ? ` · ${typeLabel}` : ''}</div>
     </div>
   )
 }

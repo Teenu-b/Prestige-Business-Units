@@ -95,6 +95,17 @@ export const LEAD_SOURCES = [
   { key: 'inbound', label: 'Inbound enquiry' },
 ]
 
+export const LEAD_TYPES = [
+  { key: 'residential', label: 'Residential' },
+  { key: 'commercial', label: 'Commercial' },
+]
+
+export const APPROVAL_CHECKLIST = [
+  { key: 'scope', label: 'Scope reviewed' },
+  { key: 'budget', label: 'Budget reviewed' },
+  { key: 'compliance', label: 'Compliance reviewed' },
+]
+
 export const JURISDICTIONS = ['NSW', 'ACT', 'VIC', 'QLD']
 
 export const BILLING_MILESTONES = [

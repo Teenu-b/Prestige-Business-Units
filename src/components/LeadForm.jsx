@@ -1,9 +1,10 @@
 import { Field } from './ui'
-import { INVOLVEMENT_TIERS, JURISDICTIONS, LEAD_SOURCES, QUALIFICATION } from '../data/constants'
+import { INVOLVEMENT_TIERS, JURISDICTIONS, LEAD_SOURCES, LEAD_TYPES, QUALIFICATION } from '../data/constants'
 import { hasRole } from '../lib/permissions'
 
 export function emptyLeadForm(user) {
   return {
+    leadType: '',
     legalName: '',
     tradingName: '',
     abn: '',
@@ -43,6 +44,7 @@ export function emptyLeadForm(user) {
 
 export function formFromOpportunity(opp) {
   return {
+    leadType: opp.leadType || '',
     legalName: opp.customer?.legalName || '',
     tradingName: opp.customer?.tradingName || '',
     abn: opp.customer?.abn || '',
@@ -82,6 +84,7 @@ export function formFromOpportunity(opp) {
 
 export function payloadFromLeadForm(form) {
   return {
+    leadType: form.leadType,
     customer: {
       legalName: form.legalName.trim(),
       tradingName: form.tradingName.trim(),
@@ -146,6 +149,7 @@ function validEmail(value) {
 
 export function validateLeadForm(form) {
   const errors = {}
+  if (!form.leadType) errors.leadType = 'Classify the lead as Residential or Commercial.'
   if (blank(form.legalName)) errors.legalName = 'Enter the customer legal name.'
   if (String(form.email || '').trim() && !validEmail(form.email)) errors.email = 'Enter a valid customer email.'
   if (blank(form.line1)) errors.line1 = 'Enter the site street.'
@@ -168,13 +172,19 @@ export function validateLeadForm(form) {
   return errors
 }
 
-export default function LeadForm({ form, set, errors = {}, estimators, sales, referrers, user, campaigns = [] }) {
+export default function LeadForm({ form, set, errors = {}, estimators, sales, referrers, user, campaigns = [], allowQualified = true }) {
   const err = (key) => errors[key]
   return (
     <>
       <div className="section">
         <h3>Customer</h3>
         <div className="form-grid">
+          <Field label="Lead type" error={err('leadType')} className="span-2">
+            <select value={form.leadType} onChange={(e) => set('leadType', e.target.value)}>
+              <option value="">Select</option>
+              {LEAD_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+          </Field>
           <Field label="Legal name" error={err('legalName')}><input value={form.legalName} onChange={(e) => set('legalName', e.target.value)} /></Field>
           <Field label="Trading name"><input value={form.tradingName} onChange={(e) => set('tradingName', e.target.value)} /></Field>
           <Field label="ABN"><input value={form.abn} onChange={(e) => set('abn', e.target.value)} /></Field>
@@ -219,9 +229,13 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
               {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <Field label="Qualification" error={err('qualification')}>
+          <Field
+            label="Qualification"
+            error={err('qualification')}
+            hint={!allowQualified ? 'log a client meeting and attach a site photo or sketch to unlock Qualified' : undefined}
+          >
             <select value={form.qualification} onChange={(e) => set('qualification', e.target.value)}>
-              {QUALIFICATION.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}
+              {QUALIFICATION.filter((q) => q.key !== 'qualified' || allowQualified).map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}
             </select>
           </Field>
           <Field label="Authority / decision-maker"><input value={form.authority} onChange={(e) => set('authority', e.target.value)} /></Field>

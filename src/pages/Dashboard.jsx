@@ -10,7 +10,9 @@ export default function Dashboard() {
   const { user, unit, opportunities, notifications } = useApp()
   const navigate = useNavigate()
   const active = opportunities.filter((o) => o.lifecycle === 'Active')
-  const pipelineValue = active.reduce((sum, o) => sum + (selectedOption(o)?.priceEx || o.acceptedValue || 0), 0)
+  const leadsInQualification = active.filter((o) => workStage(o.stage) === 2)
+  const pipelineActive = active.filter((o) => workStage(o.stage) >= 3)
+  const pipelineValue = pipelineActive.reduce((sum, o) => sum + (selectedOption(o)?.priceEx || o.acceptedValue || 0), 0)
   const overdue = active.filter((o) => o.slaDueAt && new Date(o.slaDueAt) < new Date())
   const mine = active.filter((o) =>
     [o.owners.leadId, o.owners.estimatorId, o.owners.salespersonId, o.owners.deliveryId].includes(user.id),
@@ -33,7 +35,10 @@ export default function Dashboard() {
       />
 
       <div className="stats">
-        <Stat label="Active pipeline" value={money(pipelineValue)} hint={`${active.length} live opportunities`} />
+        <Stat label="Active pipeline" value={money(pipelineValue)} hint={`${pipelineActive.length} qualified opportunities`} />
+        {!hasRole(user, 'REF') ? (
+          <Stat label="Leads to qualify" value={leadsInQualification.length} hint={<Link to="/leads">Open leads</Link>} />
+        ) : null}
         <Stat label="My work" value={mine.length} hint="Assigned to you right now" />
         <Stat label="Past SLA" value={overdue.length} hint={overdue.length ? 'Needs a decision or a chase' : 'All on time'} />
         <Stat label="Unread notices" value={unread.length} hint={<Link to="/notifications">Open inbox</Link>} />

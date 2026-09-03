@@ -4,8 +4,8 @@ import { useApp } from '../context/AppContext'
 import { Badge, CustomerCell, Empty, PageHeader } from '../components/ui'
 import { LIFECYCLE, STAGES } from '../data/constants'
 import { money, relativeDue } from '../lib/format'
-import { canCreateLead } from '../lib/permissions'
-import { selectedOption, stageMeta } from '../lib/workflow'
+import { canCreateLead, hasRole } from '../lib/permissions'
+import { selectedOption, stageMeta, workStage } from '../lib/workflow'
 
 export default function Pipeline() {
   const { opportunities, user } = useApp()
@@ -14,9 +14,11 @@ export default function Pipeline() {
   const [q, setQ] = useState('')
   const stageFilter = params.get('stage') || ''
   const lifeFilter = params.get('life') || 'Active'
+  const isReferrer = hasRole(user, 'REF')
 
   const rows = useMemo(() => {
     return opportunities
+      .filter((o) => (isReferrer ? true : workStage(o.stage) >= 3))
       .filter((o) => (lifeFilter === 'all' ? true : o.lifecycle === lifeFilter))
       .filter((o) => (stageFilter ? String(o.stage) === stageFilter : true))
       .filter((o) => {
@@ -24,13 +26,15 @@ export default function Pipeline() {
         return hay.includes(q.toLowerCase())
       })
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-  }, [opportunities, q, stageFilter, lifeFilter])
+  }, [opportunities, q, stageFilter, lifeFilter, isReferrer])
 
   return (
     <>
       <PageHeader
         title="Pipeline"
-        lede="Every live opportunity in this business unit, one row each. Open a record to work the current stage."
+        lede={isReferrer
+          ? 'Status of the leads you have introduced — nothing else.'
+          : 'Qualified opportunities attached to the pipeline. Leads still being qualified live in Leads.'}
         actions={canCreateLead(user) ? <Link className="btn btn-primary" to="/leads/new">New lead</Link> : null}
       />
 

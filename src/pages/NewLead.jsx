@@ -48,7 +48,7 @@ export default function NewLead() {
       <BackLink />
       <PageHeader
         title="New lead"
-        lede="Qualify the lead. A complete Qualified record moves to inspection, then estimation."
+        lede="Capture the lead. It starts as Nurture — log a client meeting and attach site photos or sketches on the record before it can be marked Qualified and attached to the pipeline."
       />
 
       <form onSubmit={submit} className="card card-pad" noValidate>
@@ -61,6 +61,7 @@ export default function NewLead() {
           referrers={referrers}
           campaigns={campaigns || []}
           user={user}
+          allowQualified={false}
         />
         {errorList.length ? (
           <div className="alert danger">
