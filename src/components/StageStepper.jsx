@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react'
 import { STAGES } from '../data/constants'
 import { workStage } from '../lib/workflow'
 
@@ -23,7 +24,7 @@ export default function StageStepper({ stage, viewStage, onSelect }) {
             onClick={() => reached && onSelect?.(s.id)}
             aria-current={viewing === s.id ? 'step' : undefined}
           >
-            <div className="step-dot">{s.id < current ? '✓' : i + 1}</div>
+            <div className="step-dot">{s.id < current ? <Check size={13} strokeWidth={3} /> : i + 1}</div>
             <div className="step-label">{s.short}</div>
           </button>
         )

@@ -1,11 +1,42 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Briefcase,
+  Calculator,
+  CheckCircle2,
+  CheckSquare,
+  Circle,
+  CircleDollarSign,
+  ClipboardCheck,
+  Clock,
+  FileSignature,
+  FileStack,
+  FileText,
+  FolderOpen,
+  Handshake,
+  HardHat,
+  MapPin,
+  MessageSquare,
+  PackageSearch,
+  Wrench,
+} from 'lucide-react'
+
+function SubstageStatusIcon({ status }) {
+  if (status === 'signed_off') return <span className="status-icon done"><CheckCircle2 size={18} /></span>
+  if (status === 'failed') return <span className="status-icon failed"><AlertTriangle size={18} /></span>
+  if (status === 'in_progress') return <span className="status-icon current"><Clock size={18} /></span>
+  return <span className="status-icon pending"><Circle size={18} /></span>
+}
 import { useApp } from '../context/AppContext'
 import StageStepper from '../components/StageStepper'
 import LeadForm, { estimatorChoices, formFromOpportunity, payloadFromLeadForm, validateLeadForm } from '../components/LeadForm'
 import FileUpload from '../components/FileUpload'
-import { Badge, Field, Modal, NumberInput } from '../components/ui'
+import { Badge, Field, Modal, NumberInput, Tabs } from '../components/ui'
+import { toast } from '../lib/toast'
 import {
+  APPROVAL_CHECKLIST,
   HANDOVER_SUBSTAGES,
   LIFECYCLE,
   PRODUCT_RANGES,
@@ -81,7 +112,9 @@ export default function Opportunity() {
     if (!result.ok) setGateError(result.missing)
     else {
       setGateError(null)
-      setViewStage(Math.min(10, workStage(opp.stage) + 1))
+      const next = Math.min(10, workStage(opp.stage) + 1)
+      setViewStage(next)
+      toast(`Moved to ${stageMeta(next).label}`)
     }
   }
 
@@ -104,7 +137,7 @@ export default function Opportunity() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {canAdvance(app.user, opp) && workStage(opp.stage) < 10 && opp.lifecycle === 'Active' ? (
             <button className="btn btn-primary" onClick={advance} disabled={!gate.canAdvance}>
-              Advance to {stageMeta(Math.min(10, workStage(opp.stage) + 1)).short}
+              Advance to {stageMeta(Math.min(10, workStage(opp.stage) + 1)).short} <ArrowRight size={16} />
             </button>
           ) : null}
         </div>
@@ -136,11 +169,15 @@ export default function Opportunity() {
         <div className="alert info">To leave {stageMeta(opp.stage).label}: {gate.missing.join(' · ')}</div>
       ) : null}
 
-      <div className="tabs">
-        <button type="button" className={tab === 'work' ? 'active' : ''} onClick={() => setTab('work')}>Stage work</button>
-        <button type="button" className={tab === 'files' ? 'active' : ''} onClick={() => setTab('files')}>Documents</button>
-        <button type="button" className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>History</button>
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'work', label: 'Stage work', icon: <FileStack size={14} /> },
+          { key: 'files', label: 'Documents', icon: <FolderOpen size={14} />, count: (opp.documents || []).length || undefined },
+          { key: 'history', label: 'History', icon: <Clock size={14} />, count: (opp.audit || []).length || undefined },
+        ]}
+      />
 
       <div ref={workRef}>
         {tab === 'work' ? <StagePanel opp={opp} app={app} userName={userName} viewStage={viewStage} onIssued={(result) => { if (result?.ok) showStage(5) }} /> : null}
@@ -226,25 +263,33 @@ function LeadPanel({ opp, app }) {
     if (!form.estimatorId && defaultEstimatorId) setForm((f) => ({ ...f, estimatorId: defaultEstimatorId }))
   }, [defaultEstimatorId, form.estimatorId])
 
+  const [meeting, setMeeting] = useState({ attendees: '', outcome: '', nextStep: '' })
+  const hasMeeting = (opp.meetings || []).length > 0
+  const hasSitePhoto = (opp.documents || []).some((d) => d.stage === 2 && d.type === 'site_photo')
+  const hasSketch = (opp.documents || []).some((d) => d.stage === 2 && d.type === 'drawing')
+  const qualificationReady = (hasMeeting && (hasSitePhoto || hasSketch)) || opp.qualification === 'qualified'
+
   const savePack = () => {
     const nextErrors = validateLeadForm(form)
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors)
       app.saveLeadPack(opp.id, payloadFromLeadForm(form))
+      toast('Lead pack saved', 'info')
       return
     }
     app.saveLeadPack(opp.id, payloadFromLeadForm(form))
     setErrors({})
+    toast('Lead pack saved')
   }
 
   const errorList = Object.values(errors)
 
   return (
     <div className="card card-pad">
-      <h2>Lead pack</h2>
+      <div className="card-head"><span className="card-icon"><ClipboardCheck size={16} /></span><h2>Lead pack</h2></div>
       <p className="sub">
         {opp.stage === 2
-          ? 'Complete qualification. A Qualified lead with an estimator assigned can move to site inspection. Nurture and Disqualified stay here.'
+          ? 'Every lead is not yet an opportunity. Log a client meeting and a site visit below, then mark this lead Qualified to attach it to the pipeline. Nurture and Disqualified stay here.'
           : 'This lead has already moved on. You can still review and update the details.'}
       </p>
       <LeadForm
@@ -256,6 +301,7 @@ function LeadPanel({ opp, app }) {
         referrers={app.referrers}
         campaigns={app.campaigns || []}
         user={app.user}
+        allowQualified={qualificationReady}
       />
       {errorList.length ? (
         <div className="alert danger" style={{ marginTop: 16 }}>
@@ -267,14 +313,77 @@ function LeadPanel({ opp, app }) {
       ) : opp.stage === 2 ? (
         <div className="alert info" style={{ marginTop: 16 }}>Required qualification fields must be complete to leave Lead capture.</div>
       ) : null}
+
+      {opp.stage === 2 ? (
+        <div className="section" style={{ marginTop: 24 }}>
+          <h3>Client meeting & site visit</h3>
+          <p className="sub">Qualification is decided on the ground — after a client meeting and a site visit, with photos or sketches to back it up.</p>
+          {(opp.meetings || []).map((m) => (
+            <div className="list-item" key={m.id}>
+              <div>
+                <div className="row-title">{m.attendees}</div>
+                <div className="row-meta">{m.outcome} · Next: {m.nextStep}</div>
+              </div>
+            </div>
+          ))}
+          <div className="form-grid">
+            <Field label="Attendees"><input value={meeting.attendees} onChange={(e) => setMeeting({ ...meeting, attendees: e.target.value })} /></Field>
+            <Field label="Outcome"><input value={meeting.outcome} onChange={(e) => setMeeting({ ...meeting, outcome: e.target.value })} /></Field>
+            <Field label="Next step" className="span-2"><input value={meeting.nextStep} onChange={(e) => setMeeting({ ...meeting, nextStep: e.target.value })} /></Field>
+          </div>
+          <button
+            className="btn btn-ghost"
+            style={{ marginTop: 8 }}
+            disabled={!meeting.attendees}
+            onClick={() => {
+              app.updateOpportunity(opp.id, { meetings: [{ id: uid('mtg'), at: new Date().toISOString(), ...meeting }, ...(opp.meetings || [])] }, 'Logged meeting')
+              setMeeting({ attendees: '', outcome: '', nextStep: '' })
+            }}
+          >
+            Save meeting
+          </button>
+
+          <div style={{ marginTop: 16 }}>
+            <FileUpload
+              files={(opp.documents || []).filter((d) => d.stage === 2 && d.type === 'site_photo')}
+              userId={app.user.id}
+              stage={2}
+              type="site_photo"
+              title="Site photos"
+              hint="Photos from the site visit — access, electrical conditions, constraints."
+              accept="image/*"
+              onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'site_photo', kind: 'photo', stage: 2 })))}
+              onRemove={(docId) => app.removeDocument(opp.id, docId)}
+            />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <FileUpload
+              files={(opp.documents || []).filter((d) => d.stage === 2 && d.type === 'drawing')}
+              userId={app.user.id}
+              stage={2}
+              type="drawing"
+              title="Sketches & drawings"
+              hint="Hand sketches, plans or design outputs from the site visit."
+              onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'drawing', stage: 2 })))}
+              onRemove={(docId) => app.removeDocument(opp.id, docId)}
+            />
+          </div>
+          {!qualificationReady ? (
+            <div className="alert info" style={{ marginTop: 12 }}>
+              {hasMeeting ? 'Attach a site photo or sketch' : 'Log a client meeting'} to unlock the Qualified outcome above.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div style={{ marginTop: 16 }}>
         <FileUpload
-          files={(opp.documents || []).filter((d) => d.stage === 2 || d.type === 'energy_bill' || d.type === 'lead')}
+          files={(opp.documents || []).filter((d) => (d.stage === 2 && !['site_photo', 'drawing'].includes(d.type)) || d.type === 'energy_bill')}
           userId={app.user.id}
           stage={2}
           type="lead"
           title="Lead evidence"
-          hint="Bills, photos, emails or other intake documents."
+          hint="Bills, emails or other intake documents."
           onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: r.kind === 'photo' ? 'photo' : 'lead', stage: 2 })))}
           onRemove={(docId) => app.removeDocument(opp.id, docId)}
         />
@@ -294,7 +403,7 @@ function EngagementPanel({ opp, app }) {
   const toggle = (key) => app.updateOpportunity(opp.id, { inspection: { ...insp, [key]: !insp[key] } }, 'Updated site pack')
   return (
     <div className="card card-pad">
-      <h2>Engagement & site inspection</h2>
+      <div className="card-head"><span className="card-icon"><MapPin size={16} /></span><h2>Engagement & site inspection</h2></div>
       <p className="sub">Record meetings, then complete the site pack. Inspection is not complete until photos, drawings, measurements and constraints are captured. Site Ops input can be requested here.</p>
       <h3>Meetings</h3>
       {(opp.meetings || []).map((m) => (
@@ -356,8 +465,11 @@ function EstimatePanel({ opp, app, onIssued }) {
   const latest = [...(opp.estimates || [])].sort((a, b) => b.version - a.version)[0]
   const [options, setOptions] = useState(latest?.options?.length ? latest.options : [blankOption(true)])
   const [error, setError] = useState('')
+  const [quote, setQuote] = useState({ supplier: '', url: '', note: '' })
   const canEdit = canEditEstimate(app.user)
   const showCost = canSeeCost(app.user)
+  const canVerify = hasRole(app.user, 'BOP', 'DIR', 'ADM')
+  const notes = opp.estimateNotes || { procurementNeeds: '', missingInfo: '', riskMapping: '' }
   const variationReprice = opp.variationPending && (opp.variations || [])[0]?.status === 're-estimate'
 
   const update = (i, k, v) => {
@@ -381,12 +493,13 @@ function EstimatePanel({ opp, app, onIssued }) {
       return
     }
     setError('')
+    toast('Estimate issued to sales')
     onIssued?.(result)
   }
 
   return (
     <div className="card card-pad">
-      <h2>Solution options</h2>
+      <div className="card-head"><span className="card-icon"><Calculator size={16} /></span><h2>Solution options</h2></div>
       <p className="sub">
         {variationReprice
           ? 'Update cost and price for the variation, then issue the revised pack to sales.'
@@ -424,6 +537,72 @@ function EstimatePanel({ opp, app, onIssued }) {
           </button>
         </div>
       ) : <p className="lede">Cost and margin are hidden from your role. Sign in as the estimator to issue this pack.</p>}
+
+      <div className="section" style={{ marginTop: 24 }}>
+        <h3>External supplier quotes</h3>
+        <p className="sub">Links, references and files from external suppliers used to build this estimate.</p>
+        {(opp.externalQuotes || []).map((q) => (
+          <div className="list-item" key={q.id}>
+            <div>
+              <div className="row-title">{q.supplier || 'Supplier'}</div>
+              <div className="row-meta">{q.url ? <a href={q.url} target="_blank" rel="noreferrer">{q.url}</a> : 'No link'} {q.note ? `· ${q.note}` : ''}</div>
+            </div>
+            {canEdit ? <button className="btn btn-ghost btn-sm" onClick={() => app.removeExternalQuote(opp.id, q.id)}>Remove</button> : null}
+          </div>
+        ))}
+        {canEdit ? (
+          <div className="form-grid" style={{ marginTop: 8 }}>
+            <Field label="Supplier"><input value={quote.supplier} onChange={(e) => setQuote({ ...quote, supplier: e.target.value })} /></Field>
+            <Field label="URL / link"><input value={quote.url} onChange={(e) => setQuote({ ...quote, url: e.target.value })} placeholder="https://" /></Field>
+            <Field label="Note" className="span-2"><input value={quote.note} onChange={(e) => setQuote({ ...quote, note: e.target.value })} /></Field>
+            <div className="span-2">
+              <button
+                className="btn btn-ghost"
+                disabled={!quote.supplier}
+                onClick={() => { app.addExternalQuote(opp.id, quote); setQuote({ supplier: '', url: '', note: '' }) }}
+              >
+                Add supplier quote
+              </button>
+            </div>
+          </div>
+        ) : null}
+        <FileUpload
+          compact
+          files={(opp.documents || []).filter((d) => d.stage === 4 && d.type === 'supplier_quote')}
+          userId={app.user.id}
+          stage={4}
+          type="supplier_quote"
+          title="Supplier quote attachments"
+          onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'supplier_quote', stage: 4 })))}
+          onRemove={(docId) => app.removeDocument(opp.id, docId)}
+        />
+      </div>
+
+      <div className="section" style={{ marginTop: 24 }}>
+        <h3>Estimation subtasks</h3>
+        <div className="form-grid">
+          <Field label="Procurement needs" className="span-2">
+            <textarea rows={2} defaultValue={notes.procurementNeeds} disabled={!canEdit} onBlur={(e) => app.updateOpportunity(opp.id, { estimateNotes: { ...notes, procurementNeeds: e.target.value } }, 'Updated procurement needs')} />
+          </Field>
+          <Field label="Missing information" className="span-2">
+            <textarea rows={2} defaultValue={notes.missingInfo} disabled={!canEdit} onBlur={(e) => app.updateOpportunity(opp.id, { estimateNotes: { ...notes, missingInfo: e.target.value } }, 'Updated missing info')} />
+          </Field>
+          <Field label="Risk mapping" className="span-2">
+            <textarea rows={2} defaultValue={notes.riskMapping} disabled={!canEdit} onBlur={(e) => app.updateOpportunity(opp.id, { estimateNotes: { ...notes, riskMapping: e.target.value } }, 'Updated risk mapping')} />
+          </Field>
+        </div>
+      </div>
+
+      <div className="section" style={{ marginTop: 24 }}>
+        <h3>Verification</h3>
+        {latest?.verifiedAt ? (
+          <p className="lede">Verified — no changes since sign-off.</p>
+        ) : canVerify ? (
+          <button className="btn btn-ghost" onClick={() => app.verifyEstimate(opp.id)} disabled={!latest}>Mark estimate verified</button>
+        ) : (
+          <p className="lede">Business Operations or a Director verifies this pack before it is trusted downstream.</p>
+        )}
+      </div>
     </div>
   )
 }
@@ -436,13 +615,15 @@ function ProposalPanel({ opp, app }) {
   const p = currentProposal(opp)
   const option = selectedOption(opp)
   const [feedback, setFeedback] = useState(opp.feedback || '')
+  const [outcomeReason, setOutcomeReason] = useState('')
   const canIssue = canIssueProposal(app.user)
   const variationPresent = opp.variationPending && (opp.variations || [])[0]?.status === 'priced'
+  const openOutcome = p && !['accepted', 'rejected', 're-estimated'].includes(p.status)
 
   return (
     <>
     <div className="card card-pad">
-      <h2>Proposal, negotiation & acceptance</h2>
+      <div className="card-head"><span className="card-icon"><FileText size={16} /></span><h2>Proposal, negotiation & acceptance</h2></div>
       <p className="sub">
         {variationPresent
           ? 'A revised proposal was created from the variation price. Present it to the customer, then mark it presented.'
@@ -464,6 +645,22 @@ function ProposalPanel({ opp, app }) {
         <textarea rows={4} value={feedback} onChange={(e) => setFeedback(e.target.value)} />
       </Field>
       <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => app.updateOpportunity(opp.id, { feedback }, 'Captured feedback')}>Save feedback</button>
+
+      {canIssue && openOutcome ? (
+        <div style={{ marginTop: 20 }}>
+          <h3>Outcome</h3>
+          <p className="sub">Track this quote through to Rejected, Re-estimated, or Accepted below.</p>
+          <Field label="Reason"><textarea rows={2} value={outcomeReason} onChange={(e) => setOutcomeReason(e.target.value)} /></Field>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+            <button className="btn btn-ghost" onClick={() => { app.markProposalRejected(opp.id, outcomeReason); setOutcomeReason('') }}>Customer rejected</button>
+            <button className="btn btn-ghost" onClick={() => { app.sendBackForReEstimate(opp.id, outcomeReason); setOutcomeReason('') }}>Send back for re-estimate</button>
+          </div>
+        </div>
+      ) : p?.status === 'rejected' ? (
+        <div className="alert danger" style={{ marginTop: 16 }}>Rejected by the customer{p.rejectionReason ? `: ${p.rejectionReason}` : ''}.</div>
+      ) : p?.status === 're-estimated' ? (
+        <div className="alert warning" style={{ marginTop: 16 }}>Sent back for re-estimate — see the Estimation stage.</div>
+      ) : null}
     </div>
     <div style={{ height: 16 }} />
     <ClosurePanel opp={opp} app={app} />
@@ -484,7 +681,7 @@ function ClosurePanel({ opp, app }) {
 
   return (
     <div className="card card-pad">
-      <h2>Negotiation & acceptance</h2>
+      <div className="card-head"><span className="card-icon"><Handshake size={16} /></span><h2>Negotiation & acceptance</h2></div>
       <p className="sub">Offers at or above the {pct(floor, 0)} floor can be issued. Below-floor pricing routes to the Director. Acceptance creates the 20% billing request — not a tax invoice.</p>
       <p>Offer {money(option?.priceEx)} ex GST ({money(incGst(option?.priceEx))} inc) · margin {pct(margin)}</p>
       {low ? <div className="alert warning">Below the {pct(floor, 0)} floor. Director approval is required before issue.</div> : <div className="alert success">Within authority — salesperson may issue.</div>}
@@ -499,14 +696,15 @@ function ClosurePanel({ opp, app }) {
       ) : null}
       {canDir && p?.directorApproval?.status === 'requested' ? (
         <div style={{ display: 'flex', gap: 8, margin: '12px 0' }}>
-          <button className="btn btn-primary" onClick={() => app.decidePricing(opp.id, true, comment)}>Approve</button>
-          <button className="btn btn-danger" onClick={() => app.decidePricing(opp.id, false, comment)}>Reject</button>
+          <button className="btn btn-primary" onClick={() => { app.decidePricing(opp.id, true, comment); toast('Pricing approved') }}>Approve</button>
+          <button className="btn btn-danger" onClick={() => { app.decidePricing(opp.id, false, comment); toast('Pricing rejected', 'danger') }}>Reject</button>
         </div>
       ) : null}
       {canIssue ? (
         <button className="btn btn-ghost" onClick={() => {
           const r = app.issueOffer(opp.id)
-          if (!r.ok) alert(r.error)
+          if (!r.ok) toast(r.error, 'danger')
+          else toast('Final offer issued')
         }}>Issue final offer</button>
       ) : null}
       <div style={{ marginTop: 20 }}>
@@ -524,7 +722,17 @@ function ClosurePanel({ opp, app }) {
           onRemove={(docId) => app.removeDocument(opp.id, docId)}
         />
         <Field label="File name (if already stored)"><input value={doc} onChange={(e) => setDoc(e.target.value)} placeholder="Signed-offer.pdf" /></Field>
-        <button className="btn btn-primary" style={{ marginTop: 10 }} disabled={!doc && !(opp.documents || []).some((d) => d.type === 'acceptance')} onClick={() => app.recordAcceptance(opp.id, doc || (opp.documents || []).find((d) => d.type === 'acceptance')?.name || 'Signed-acceptance.pdf')}>Record acceptance</button>
+        <button
+          className="btn btn-primary"
+          style={{ marginTop: 10 }}
+          disabled={!doc && !(opp.documents || []).some((d) => d.type === 'acceptance')}
+          onClick={() => {
+            app.recordAcceptance(opp.id, doc || (opp.documents || []).find((d) => d.type === 'acceptance')?.name || 'Signed-acceptance.pdf')
+            toast('Acceptance recorded')
+          }}
+        >
+          Record acceptance
+        </button>
       </div>
     </div>
   )
@@ -645,11 +853,25 @@ function JobSetupPanel({ opp, app }) {
   const delivery = app.users.filter((u) => u.roles.includes('SOM') && u.unitIds.includes(app.unit.id))
   return (
     <div className="card card-pad">
-      <h2>Job setup & cost baseline</h2>
+      <div className="card-head"><span className="card-icon"><Briefcase size={16} /></span><h2>Job setup & cost baseline</h2></div>
       <p className="sub">Business Operations converts the accepted offer to a job: carry forward the quote, lock the budget, set cost categories and assign Site Ops.</p>
+      <div className="form-grid">
+        <Field label="Approved budget (ex GST)">
+          <NumberInput value={job.approvedBudget || opp.acceptedValue || ''} disabled={!can || !!job.budgetLockedAt} onChange={(v) => app.updateOpportunity(opp.id, { jobBaseline: { ...job, approvedBudget: v } }, 'Updated approved budget')} />
+        </Field>
+      </div>
       <label className="check">
-        <input type="checkbox" checked={!!job.budgetConfirmed} disabled={!can} onChange={(e) => app.updateOpportunity(opp.id, { jobBaseline: { ...job, budgetConfirmed: e.target.checked } }, 'Updated job baseline')} />
-        Approved budget / cost baseline confirmed
+        <input
+          type="checkbox"
+          checked={!!job.budgetConfirmed}
+          disabled={!can}
+          onChange={(e) => app.updateOpportunity(
+            opp.id,
+            { jobBaseline: { ...job, budgetConfirmed: e.target.checked, approvedBudget: job.approvedBudget || opp.acceptedValue || 0, budgetLockedAt: e.target.checked ? new Date().toISOString() : null } },
+            'Updated job baseline',
+          )}
+        />
+        Approved budget / cost baseline locked{job.budgetLockedAt ? ` (${formatDate(job.budgetLockedAt)})` : ''}
       </label>
       <label className="check">
         <input type="checkbox" checked={!!job.costCategories} disabled={!can} onChange={(e) => app.updateOpportunity(opp.id, { jobBaseline: { ...job, costCategories: e.target.checked } }, 'Updated cost categories')} />
@@ -686,16 +908,49 @@ function JobSetupPanel({ opp, app }) {
 
 function ApprovalsPanel({ opp, app }) {
   const can = canManageApprovals(app.user)
+  const [newApproval, setNewApproval] = useState({ label: '', required: true })
+  const toggleChecklist = (key) => {
+    const current = opp.approvalChecklist || []
+    const has = current.some((c) => c.key === key)
+    const next = has ? current.map((c) => (c.key === key ? { ...c, done: !c.done } : c)) : [...current, { key, done: true }]
+    app.updateOpportunity(opp.id, { approvalChecklist: next }, 'Updated approval checklist', key)
+  }
   return (
     <>
     <div className="card card-pad">
-      <h2>Approvals & procurement</h2>
+      <div className="card-head"><span className="card-icon"><CheckSquare size={16} /></span><h2>Approvals & procurement</h2></div>
       <p className="sub">Each approval is its own record. Delivery cannot start until every mandatory item is Approved or authorised Not Required.</p>
+
+      <h3>Pre-checklist</h3>
+      {APPROVAL_CHECKLIST.map((c) => {
+        const done = (opp.approvalChecklist || []).find((x) => x.key === c.key)?.done
+        return (
+          <label className="check" key={c.key}>
+            <input type="checkbox" checked={!!done} disabled={!can} onChange={() => toggleChecklist(c.key)} /> {c.label}
+          </label>
+        )
+      })}
+
+      <h3 style={{ marginTop: 20 }}>Approval items</h3>
       {(opp.approvals || []).map((a) => (
-        <div className="list-item" key={a.id}>
-          <div>
+        <div className="list-item" key={a.id} style={{ flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
             <div className="row-title">{a.label} {a.required ? '' : '(optional)'}</div>
-            <div className="row-meta">{a.notes || 'No note yet'}</div>
+            {can ? (
+              <textarea rows={1} className="search" style={{ marginTop: 6, width: '100%' }} defaultValue={a.notes} placeholder="Notes" onBlur={(e) => app.updateApproval(opp.id, a.id, { notes: e.target.value })} />
+            ) : (
+              <div className="row-meta">{a.notes || 'No note yet'}</div>
+            )}
+            <FileUpload
+              compact
+              files={(opp.documents || []).filter((d) => d.label === `approval_${a.id}`)}
+              userId={app.user.id}
+              stage={7}
+              type="approval_doc"
+              label={`approval_${a.id}`}
+              onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'approval_doc', stage: 7, label: `approval_${a.id}` })))}
+              onRemove={(docId) => app.removeDocument(opp.id, docId)}
+            />
           </div>
           {can ? (
             <select className="select" style={{ maxWidth: 160 }} value={a.status} onChange={(e) => app.updateApproval(opp.id, a.id, { status: e.target.value, outcomeAt: ['Approved', 'Rejected', 'Not Required'].includes(e.target.value) ? new Date().toISOString() : a.outcomeAt })}>
@@ -704,6 +959,33 @@ function ApprovalsPanel({ opp, app }) {
           ) : <Badge tone={a.status === 'Approved' || a.status === 'Not Required' ? 'success' : a.status === 'Rejected' ? 'danger' : 'warning'}>{a.status}</Badge>}
         </div>
       ))}
+      {can ? (
+        <div className="form-grid" style={{ marginTop: 12 }}>
+          <Field label="New approval requirement"><input value={newApproval.label} onChange={(e) => setNewApproval({ ...newApproval, label: e.target.value })} /></Field>
+          <Field label="Required">
+            <label className="check">
+              <input type="checkbox" checked={newApproval.required} onChange={(e) => setNewApproval({ ...newApproval, required: e.target.checked })} /> Mandatory before delivery
+            </label>
+          </Field>
+          <div className="span-2">
+            <button
+              className="btn btn-ghost"
+              disabled={!newApproval.label}
+              onClick={() => {
+                app.updateOpportunity(
+                  opp.id,
+                  { approvals: [...(opp.approvals || []), { id: uid('appr'), type: 'custom', label: newApproval.label, required: newApproval.required, status: 'Not Started', ownerRole: 'BOP', submittedAt: null, outcomeAt: null, notes: '', documentName: '' }] },
+                  'Added approval requirement',
+                  newApproval.label,
+                )
+                setNewApproval({ label: '', required: true })
+              }}
+            >
+              Add approval requirement
+            </button>
+          </div>
+        </div>
+      ) : null}
       {hasRole(app.user, 'BDM', 'DBD', 'DIR', 'EST', 'SOM', 'BOP') ? (
         <div style={{ marginTop: 16 }}>
           <VariationBox opp={opp} app={app} />
@@ -730,7 +1012,7 @@ function VariationBox({ opp, app }) {
         <Modal title="Raise a variation" body="Use after acceptance when council or DNSP conditions change the scope." onClose={() => setOpen(false)} actions={
           <>
             <button className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={() => { app.raiseVariation(opp.id, reason); setOpen(false) }}>Raise</button>
+            <button className="btn btn-primary" onClick={() => { app.raiseVariation(opp.id, reason); setOpen(false); toast('Variation raised', 'info') }}>Raise</button>
           </>
         }>
           <Field label="Reason"><textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
@@ -745,7 +1027,7 @@ function ProcurementPanel({ opp, app }) {
   const [po, setPo] = useState({ ref: '', supplier: '', items: '', amount: '', eta: '' })
   return (
     <div className="card card-pad">
-      <h2>Materials</h2>
+      <div className="card-head"><span className="card-icon"><PackageSearch size={16} /></span><h2>Materials</h2></div>
       <p className="sub">Raise POs against this opportunity. Confirmed physical delivery creates the 40% billing request once only.</p>
       {(opp.purchaseOrders || []).map((p) => (
         <div className="option-card" key={p.id}>
@@ -774,12 +1056,15 @@ function ProcurementPanel({ opp, app }) {
   )
 }
 
-function SitePanel({ opp, app }) {
+function SitePanel({ opp, app, userName }) {
   const can = canSignSite(app.user)
+  const showCost = canSeeCost(app.user)
   const sw = opp.siteWorks || {}
+  const [assignee, setAssignee] = useState({})
+  const teamOptions = app.users.filter((u) => u.unitIds.includes(app.unit.id))
   return (
     <div className="card card-pad">
-      <h2>Site planning & delivery</h2>
+      <div className="card-head"><span className="card-icon"><HardHat size={16} /></span><h2>Site planning & delivery</h2></div>
       <p className="sub">Pre-start, materials and installation. Testing and handover are the next block. Variations freeze progression until reconciled.</p>
       <div className="form-grid">
         <Field label="Install start"><input type="date" defaultValue={sw.installWindowStart} onBlur={(e) => app.updateSiteWorks(opp.id, { installWindowStart: e.target.value })} /></Field>
@@ -792,10 +1077,11 @@ function SitePanel({ opp, app }) {
           const rec = (sw.substages || []).find((x) => x.key === s.key) || { status: 'not_started' }
           return (
             <div className="substage" key={s.key} style={{ flexWrap: 'wrap' }}>
-              <Badge tone={rec.status === 'signed_off' ? 'success' : rec.status === 'failed' ? 'danger' : rec.status === 'in_progress' ? 'warning' : 'neutral'}>{s.key}</Badge>
+              <SubstageStatusIcon status={rec.status} />
               <div>
-                <div className="row-title">{s.label}</div>
+                <div className="row-title">{s.label} <span className="row-meta">{s.key}</span></div>
                 <div className="row-meta">{s.hint}</div>
+                {rec.status === 'failed' ? <div className="row-meta">Defect: {rec.defects || '—'}{rec.assignedTo ? ` · Assigned to ${userName(rec.assignedTo)}` : ''}</div> : null}
                 <FileUpload
                   compact
                   files={(opp.documents || []).filter((d) => d.label === s.key)}
@@ -809,34 +1095,68 @@ function SitePanel({ opp, app }) {
                 />
               </div>
               {rec.status === 'signed_off' ? <span className="row-meta">Signed {formatDate(rec.signedOffAt)}</span> : can ? (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-sm btn-primary" onClick={() => app.signSubstage(opp.id, s.key, { photos: [{ name: `${s.key}.jpg`, at: new Date().toISOString() }] })}>Sign off</button>
-                  {s.key === '8c' ? <button className="btn btn-sm btn-danger" onClick={() => app.signSubstage(opp.id, s.key, { failed: true, defects: 'Installation blocked' })}>Fail</button> : null}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button className="btn btn-sm btn-primary" onClick={() => { app.signSubstage(opp.id, s.key, { photos: [{ name: `${s.key}.jpg`, at: new Date().toISOString() }] }); toast(`${s.label} signed off`) }}>Sign off</button>
+                  {s.key === '8c' ? (
+                    <>
+                      <select className="select" style={{ maxWidth: 140 }} value={assignee[s.key] || ''} onChange={(e) => setAssignee({ ...assignee, [s.key]: e.target.value })}>
+                        <option value="">Assign defect to…</option>
+                        {teamOptions.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                      <button className="btn btn-sm btn-danger" onClick={() => { app.signSubstage(opp.id, s.key, { failed: true, defects: 'Installation blocked', assignedTo: assignee[s.key] || '' }); toast(`${s.label} marked failed`, 'danger') }}>Fail</button>
+                    </>
+                  ) : null}
                 </div>
               ) : <span className="row-meta">{rec.status}</span>}
             </div>
           )
         })}
       </div>
+      <div className="section" style={{ marginTop: 20 }}>
+        <h3>Compliance & subcontractors</h3>
+        <Field label="Insurance & subcontract details">
+          <textarea rows={3} defaultValue={sw.insuranceDetails} disabled={!can} onBlur={(e) => app.updateSiteWorks(opp.id, { insuranceDetails: e.target.value })} placeholder="Subcontractor names, insurer, policy numbers, expiry dates" />
+        </Field>
+        <FileUpload
+          compact
+          files={(opp.documents || []).filter((d) => d.type === 'insurance')}
+          userId={app.user.id}
+          stage={8}
+          type="insurance"
+          title="Insurance certificates"
+          onAdd={(records) => app.addDocuments(opp.id, records.map((r) => ({ ...r, type: 'insurance', stage: 8 })))}
+          onRemove={(docId) => app.removeDocument(opp.id, docId)}
+        />
+        {showCost ? (
+          <Field label="Actual cost to date (ex GST)" hint="against the approved budget from Job Setup">
+            <NumberInput value={sw.actualCost} disabled={!can} onChange={(v) => app.updateSiteWorks(opp.id, { actualCost: v })} />
+          </Field>
+        ) : null}
+      </div>
     </div>
   )
 }
 
-function HandoverWorksPanel({ opp, app }) {
+function HandoverWorksPanel({ opp, app, userName }) {
   const can = canSignSite(app.user)
+  const showCost = canSeeCost(app.user)
   const items = opp.siteWorks?.handover?.length ? opp.siteWorks.handover : HANDOVER_SUBSTAGES.map((s) => ({ ...s, status: 'not_started' }))
+  const [assignee, setAssignee] = useState({})
+  const [cost, setCost] = useState({ description: '', amount: '' })
+  const teamOptions = app.users.filter((u) => u.unitIds.includes(app.unit.id))
   return (
     <div className="card card-pad">
-      <h2>Test, commission & handover</h2>
+      <div className="card-head"><span className="card-icon"><Wrench size={16} /></span><h2>Test, commission & handover</h2></div>
       <p className="sub">Operational completion is separate from invoices and payments. Commissioning creates the final billing request.</p>
       {HANDOVER_SUBSTAGES.map((s) => {
         const rec = items.find((x) => x.key === s.key) || { status: 'not_started' }
         return (
             <div className="substage" key={s.key} style={{ flexWrap: 'wrap' }}>
-              <Badge tone={rec.status === 'signed_off' ? 'success' : rec.status === 'failed' ? 'danger' : 'neutral'}>{s.key}</Badge>
+              <SubstageStatusIcon status={rec.status} />
               <div>
-                <div className="row-title">{s.label}</div>
+                <div className="row-title">{s.label} <span className="row-meta">{s.key}</span></div>
                 <div className="row-meta">{s.hint}</div>
+                {rec.status === 'failed' ? <div className="row-meta">Defect: {rec.defects || '—'}{rec.assignedTo ? ` · Assigned to ${userName(rec.assignedTo)}` : ''}</div> : null}
                 <FileUpload
                   compact
                   files={(opp.documents || []).filter((d) => d.label === s.key)}
@@ -849,27 +1169,68 @@ function HandoverWorksPanel({ opp, app }) {
                 />
               </div>
               {rec.status === 'signed_off' ? <span className="row-meta">Signed {formatDate(rec.signedOffAt)}</span> : can ? (
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-sm btn-primary" onClick={() => app.signSubstage(opp.id, s.key, { photos: [{ name: `${s.key}.jpg`, at: new Date().toISOString() }] })}>Sign off</button>
-                {s.key === '9b' ? <button className="btn btn-sm btn-danger" onClick={() => app.signSubstage(opp.id, s.key, { failed: true, defects: 'Failed commissioning test' })}>Fail</button> : null}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button className="btn btn-sm btn-primary" onClick={() => { app.signSubstage(opp.id, s.key, { photos: [{ name: `${s.key}.jpg`, at: new Date().toISOString() }] }); toast(`${s.label} signed off`) }}>Sign off</button>
+                {s.key === '9b' ? (
+                  <>
+                    <select className="select" style={{ maxWidth: 140 }} value={assignee[s.key] || ''} onChange={(e) => setAssignee({ ...assignee, [s.key]: e.target.value })}>
+                      <option value="">Assign defect to…</option>
+                      {teamOptions.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                    <button className="btn btn-sm btn-danger" onClick={() => { app.signSubstage(opp.id, s.key, { failed: true, defects: 'Failed commissioning test', assignedTo: assignee[s.key] || '' }); toast(`${s.label} marked failed`, 'danger') }}>Fail</button>
+                  </>
+                ) : null}
               </div>
             ) : <span className="row-meta">{rec.status}</span>}
           </div>
         )
       })}
       {opp.operationalComplete ? <div className="alert success" style={{ marginTop: 12 }}>Operationally complete.</div> : null}
+
+      {showCost ? (
+        <div className="section" style={{ marginTop: 20 }}>
+          <h3>Final cost reconciliation</h3>
+          <Field label="Final labor cost (ex GST)">
+            <NumberInput value={opp.laborCostFinal} onChange={(v) => app.updateOpportunity(opp.id, { laborCostFinal: v }, 'Updated final labor cost')} />
+          </Field>
+          <h4 style={{ marginTop: 16 }}>Additional / unplanned costs</h4>
+          {(opp.additionalCosts || []).map((c) => (
+            <div className="list-item" key={c.id}>
+              <div className="row-title">{c.description}</div>
+              <div className="row-meta">{money(c.amount)}</div>
+            </div>
+          ))}
+          <div className="form-grid" style={{ marginTop: 8 }}>
+            <Field label="Description"><input value={cost.description} onChange={(e) => setCost({ ...cost, description: e.target.value })} /></Field>
+            <Field label="Amount"><NumberInput value={cost.amount} onChange={(v) => setCost({ ...cost, amount: v })} /></Field>
+            <div className="span-2">
+              <button
+                className="btn btn-ghost"
+                disabled={!cost.description || !cost.amount}
+                onClick={() => {
+                  app.updateOpportunity(opp.id, { additionalCosts: [...(opp.additionalCosts || []), { id: uid('cost'), description: cost.description, amount: Number(cost.amount) || 0 }] }, 'Added additional cost', cost.description)
+                  setCost({ description: '', amount: '' })
+                }}
+              >
+                Add cost
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
 
 function ServicePanel({ opp, app }) {
   const svc = opp.service || {}
+  const [enquiry, setEnquiry] = useState('')
   return (
     <>
       <BillingPanel opp={opp} app={app} />
       <div style={{ height: 16 }} />
       <div className="card card-pad">
-        <h2>Post-work service, reviews & referrals</h2>
+        <div className="card-head"><span className="card-icon"><MessageSquare size={16} /></span><h2>Post-work service, reviews & referrals</h2></div>
         <p className="sub">BDM owns the customer relationship. Accounts confirms financial completion separately.</p>
         <label className="check">
           <input type="checkbox" checked={!!svc.reviewRequested} onChange={(e) => app.updateOpportunity(opp.id, { service: { ...svc, reviewRequested: e.target.checked } }, 'Updated service')} />
@@ -879,6 +1240,9 @@ function ServicePanel({ opp, app }) {
           <input type="checkbox" checked={!!svc.referralCaptured} onChange={(e) => app.updateOpportunity(opp.id, { service: { ...svc, referralCaptured: e.target.checked } }, 'Updated referral')} />
           Referral or repeat opportunity captured
         </label>
+        <Field label="Client feedback / review">
+          <textarea rows={3} defaultValue={svc.feedbackText} onBlur={(e) => app.updateOpportunity(opp.id, { service: { ...svc, feedbackText: e.target.value } }, 'Captured service feedback')} placeholder="What the customer said, star rating, review link…" />
+        </Field>
         <Field label="Service actions">
           <textarea rows={3} defaultValue={svc.actions} onBlur={(e) => app.updateOpportunity(opp.id, { service: { ...svc, actions: e.target.value } }, 'Updated service actions')} />
         </Field>
@@ -900,7 +1264,44 @@ function ServicePanel({ opp, app }) {
         ) : (
           <p className="lede" style={{ marginTop: 12 }}>{opp.financialComplete ? 'Financially complete.' : 'Financial completion is with Accounts.'}</p>
         )}
+
+        <h3 style={{ marginTop: 24 }}>Post-work enquiries</h3>
+        {(opp.postWorkEnquiries || []).length === 0 ? <p className="lede">No enquiries logged.</p> : null}
+        {(opp.postWorkEnquiries || []).map((e) => (
+          <div className="list-item" key={e.id}>
+            <div>
+              <div className="row-title">{e.description}</div>
+              <div className="row-meta">{formatDate(e.date)}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Badge tone={e.status === 'Resolved' ? 'success' : 'warning'}>{e.status}</Badge>
+              {e.status !== 'Resolved' ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => app.updateOpportunity(opp.id, { postWorkEnquiries: (opp.postWorkEnquiries || []).map((x) => (x.id === e.id ? { ...x, status: 'Resolved' } : x)) }, 'Resolved post-work enquiry', e.description)}
+                >
+                  Mark resolved
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <input className="search" placeholder="Describe the enquiry or service request" value={enquiry} onChange={(e) => setEnquiry(e.target.value)} />
+          <button
+            className="btn btn-ghost"
+            disabled={!enquiry}
+            onClick={() => {
+              app.updateOpportunity(opp.id, { postWorkEnquiries: [{ id: uid('enq'), date: new Date().toISOString(), description: enquiry, status: 'Open' }, ...(opp.postWorkEnquiries || [])] }, 'Logged post-work enquiry', enquiry)
+              setEnquiry('')
+            }}
+          >
+            Log enquiry
+          </button>
+        </div>
       </div>
+      <div style={{ height: 16 }} />
+      <HandoverPanel opp={opp} app={app} />
     </>
   )
 }
@@ -910,7 +1311,7 @@ function BillingPanel({ opp, app }) {
   const comm = commissionFor(opp, app.unit.commissionTiers)
   return (
     <div className="card card-pad">
-      <h2>Financials (not a separate closure module)</h2>
+      <div className="card-head"><span className="card-icon"><CircleDollarSign size={16} /></span><h2>Financials (not a separate closure module)</h2></div>
       <p className="sub">This system creates billing requests. Tax invoice numbers and payment status are recorded from accounting — they are not invented here.</p>
       {(opp.billingRequests || []).map((b) => (
         <div className="list-item" key={b.id}>
@@ -952,7 +1353,7 @@ function HandoverPanel({ opp, app }) {
   const billsPaid = (opp.billingRequests || []).every((b) => b.paymentStatus === 'paid' || b.invoiceNumber)
   return (
     <div className="card card-pad">
-      <h2>Handover notes</h2>
+      <div className="card-head"><span className="card-icon"><FileSignature size={16} /></span><h2>Handover notes</h2></div>
       <p className="sub">Warranty and follow-up stay on the job. There is no separate closure module.</p>
       <label className="check"><input type="checkbox" defaultChecked={billsPaid} readOnly /> Billing requests have accounting references</label>
       <label className="check"><input type="checkbox" defaultChecked={(opp.rebates || []).every((r) => r.status !== 'Not lodged')} readOnly /> Rebates lodged or not applicable</label>
@@ -962,7 +1363,7 @@ function HandoverPanel({ opp, app }) {
         <Field label="Future engagement" className="span-2"><textarea rows={3} value={future} onChange={(e) => setFuture(e.target.value)} placeholder="Maintenance, monitoring, upsell notes" /></Field>
       </div>
       {hasRole(app.user, 'DIR', 'SOM', 'ADM') ? (
-        <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!warranty} onClick={() => app.closeOpportunity(opp.id, { warrantyContact: warranty, futureEngagement: future })}>
+        <button className="btn btn-primary" style={{ marginTop: 16 }} disabled={!warranty} onClick={() => { app.closeOpportunity(opp.id, { warrantyContact: warranty, futureEngagement: future }); toast('Opportunity closed') }}>
           Mark closed / delivered
         </button>
       ) : <p className="lede">Director or Site Operations closes the record.</p>}

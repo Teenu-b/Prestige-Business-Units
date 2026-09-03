@@ -1,9 +1,24 @@
-import { Field } from './ui'
-import { INVOLVEMENT_TIERS, JURISDICTIONS, LEAD_SOURCES, QUALIFICATION } from '../data/constants'
+import { useEffect, useState } from 'react'
+import { Building2, ClipboardList, MapPin, UserCheck, Zap } from 'lucide-react'
+import { Field, SectionHeading } from './ui'
+import { INVOLVEMENT_TIERS, JURISDICTIONS, LEAD_SOURCES, LEAD_TYPES, QUALIFICATION } from '../data/constants'
 import { hasRole } from '../lib/permissions'
+
+const SECTIONS = [
+  { id: 'lf-customer', label: 'Customer', icon: Building2 },
+  { id: 'lf-site', label: 'Site', icon: MapPin },
+  { id: 'lf-contact', label: 'Decision-maker', icon: UserCheck },
+  { id: 'lf-qualification', label: 'Qualification', icon: ClipboardList },
+  { id: 'lf-energy', label: 'Energy & source', icon: Zap },
+]
+
+function jumpTo(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 export function emptyLeadForm(user) {
   return {
+    leadType: '',
     legalName: '',
     tradingName: '',
     abn: '',
@@ -43,6 +58,7 @@ export function emptyLeadForm(user) {
 
 export function formFromOpportunity(opp) {
   return {
+    leadType: opp.leadType || '',
     legalName: opp.customer?.legalName || '',
     tradingName: opp.customer?.tradingName || '',
     abn: opp.customer?.abn || '',
@@ -82,6 +98,7 @@ export function formFromOpportunity(opp) {
 
 export function payloadFromLeadForm(form) {
   return {
+    leadType: form.leadType,
     customer: {
       legalName: form.legalName.trim(),
       tradingName: form.tradingName.trim(),
@@ -146,6 +163,7 @@ function validEmail(value) {
 
 export function validateLeadForm(form) {
   const errors = {}
+  if (!form.leadType) errors.leadType = 'Classify the lead as Residential or Commercial.'
   if (blank(form.legalName)) errors.legalName = 'Enter the customer legal name.'
   if (String(form.email || '').trim() && !validEmail(form.email)) errors.email = 'Enter a valid customer email.'
   if (blank(form.line1)) errors.line1 = 'Enter the site street.'
@@ -168,13 +186,42 @@ export function validateLeadForm(form) {
   return errors
 }
 
-export default function LeadForm({ form, set, errors = {}, estimators, sales, referrers, user, campaigns = [] }) {
+export default function LeadForm({ form, set, errors = {}, estimators, sales, referrers, user, campaigns = [], allowQualified = true }) {
   const err = (key) => errors[key]
+  const [active, setActive] = useState(SECTIONS[0].id)
+
+  useEffect(() => {
+    const els = SECTIONS.map((s) => document.getElementById(s.id)).filter(Boolean)
+    if (!els.length) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        if (visible[0]) setActive(visible[0].target.id)
+      },
+      { rootMargin: '-15% 0px -70% 0px', threshold: 0 },
+    )
+    els.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <>
-      <div className="section">
-        <h3>Customer</h3>
+      <div className="form-nav">
+        {SECTIONS.map((s) => (
+          <button key={s.id} type="button" className={active === s.id ? 'active' : ''} onClick={() => { setActive(s.id); jumpTo(s.id) }}>
+            <s.icon size={13} /> {s.label}
+          </button>
+        ))}
+      </div>
+      <div className="section" id="lf-customer">
+        <SectionHeading icon={<Building2 size={13} />} title="Customer" />
         <div className="form-grid">
+          <Field label="Lead type" error={err('leadType')} className="span-2">
+            <select value={form.leadType} onChange={(e) => set('leadType', e.target.value)}>
+              <option value="">Select</option>
+              {LEAD_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
+          </Field>
           <Field label="Legal name" error={err('legalName')}><input value={form.legalName} onChange={(e) => set('legalName', e.target.value)} /></Field>
           <Field label="Trading name"><input value={form.tradingName} onChange={(e) => set('tradingName', e.target.value)} /></Field>
           <Field label="ABN"><input value={form.abn} onChange={(e) => set('abn', e.target.value)} /></Field>
@@ -184,8 +231,8 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
         </div>
       </div>
 
-      <div className="section">
-        <h3>Site</h3>
+      <div className="section" id="lf-site">
+        <SectionHeading icon={<MapPin size={13} />} title="Site" />
         <div className="form-grid">
           <Field label="Street" className="span-2" error={err('line1')}><input value={form.line1} onChange={(e) => set('line1', e.target.value)} /></Field>
           <Field label="Suburb" error={err('suburb')}><input value={form.suburb} onChange={(e) => set('suburb', e.target.value)} /></Field>
@@ -200,8 +247,8 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
         </div>
       </div>
 
-      <div className="section">
-        <h3>Decision-maker</h3>
+      <div className="section" id="lf-contact">
+        <SectionHeading icon={<UserCheck size={13} />} title="Decision-maker" />
         <div className="form-grid">
           <Field label="Name" error={err('contactName')}><input value={form.contactName} onChange={(e) => set('contactName', e.target.value)} /></Field>
           <Field label="Role"><input value={form.contactRole} onChange={(e) => set('contactRole', e.target.value)} /></Field>
@@ -210,8 +257,8 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
         </div>
       </div>
 
-      <div className="section">
-        <h3>Qualification</h3>
+      <div className="section" id="lf-qualification">
+        <SectionHeading icon={<ClipboardList size={13} />} title="Qualification" />
         <div className="form-grid">
           <Field label="Campaign" hint="optional — referrer, inbound or outreach is fine">
             <select value={form.campaignId} onChange={(e) => set('campaignId', e.target.value)}>
@@ -219,9 +266,13 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
               {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <Field label="Qualification" error={err('qualification')}>
+          <Field
+            label="Qualification"
+            error={err('qualification')}
+            hint={!allowQualified ? 'log a client meeting and attach a site photo or sketch to unlock Qualified' : undefined}
+          >
             <select value={form.qualification} onChange={(e) => set('qualification', e.target.value)}>
-              {QUALIFICATION.map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}
+              {QUALIFICATION.filter((q) => q.key !== 'qualified' || allowQualified).map((q) => <option key={q.key} value={q.key}>{q.label}</option>)}
             </select>
           </Field>
           <Field label="Authority / decision-maker"><input value={form.authority} onChange={(e) => set('authority', e.target.value)} /></Field>
@@ -232,8 +283,8 @@ export default function LeadForm({ form, set, errors = {}, estimators, sales, re
         </div>
       </div>
 
-      <div className="section">
-        <h3>Energy & source</h3>
+      <div className="section" id="lf-energy">
+        <SectionHeading icon={<Zap size={13} />} title="Energy & source" />
         <div className="form-grid">
           <Field label="Annual usage (kWh)" hint="or tick bills on file" error={err('annualKwh')}>
             <input value={form.annualKwh} onChange={(e) => set('annualKwh', e.target.value)} />

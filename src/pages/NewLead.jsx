@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Save } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { BackLink, PageHeader } from '../components/ui'
 import LeadForm, { emptyLeadForm, estimatorChoices, payloadFromLeadForm, validateLeadForm } from '../components/LeadForm'
+import { toast } from '../lib/toast'
 
 export default function NewLead() {
   const { createLead, users, referrers, unit, user, campaigns } = useApp()
@@ -38,6 +40,7 @@ export default function NewLead() {
       return
     }
     const opp = createLead(payloadFromLeadForm(form))
+    toast(`Lead ${opp.number} saved`)
     navigate(`/opportunities/${opp.id}`)
   }
 
@@ -48,7 +51,7 @@ export default function NewLead() {
       <BackLink />
       <PageHeader
         title="New lead"
-        lede="Qualify the lead. A complete Qualified record moves to inspection, then estimation."
+        lede="Capture the lead. It starts as Nurture — log a client meeting and attach site photos or sketches on the record before it can be marked Qualified and attached to the pipeline."
       />
 
       <form onSubmit={submit} className="card card-pad" noValidate>
@@ -61,6 +64,7 @@ export default function NewLead() {
           referrers={referrers}
           campaigns={campaigns || []}
           user={user}
+          allowQualified={false}
         />
         {errorList.length ? (
           <div className="alert danger">
@@ -70,7 +74,7 @@ export default function NewLead() {
             </ul>
           </div>
         ) : null}
-        <button className="btn btn-primary" type="submit">Save lead</button>
+        <button className="btn btn-primary" type="submit"><Save size={16} /> Save lead</button>
       </form>
     </>
   )

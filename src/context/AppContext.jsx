@@ -204,6 +204,7 @@ export function AppProvider({ children }) {
           lifecycle: 'Active',
           variationPending: false,
           marginFloor: unit.marginFloor,
+          leadType: payload.leadType || '',
           customer: payload.customer,
           site: {
             ...payload.site,
@@ -230,9 +231,12 @@ export function AppProvider({ children }) {
           slaStartedAt: createdAt,
           slaDueAt: addDays(createdAt, unit.slaDays[2] || 3),
           estimates: [],
+          externalQuotes: [],
+          estimateNotes: { procurementNeeds: '', missingInfo: '', riskMapping: '' },
           proposals: [],
           variations: [],
           approvals: [],
+          approvalChecklist: [],
           purchaseOrders: [],
           siteWorks: {
             installWindowStart: '',
@@ -272,8 +276,11 @@ export function AppProvider({ children }) {
           opportunityValue: payload.opportunityValue || '',
           inspection: { photos: false, drawings: false, measurements: false, constraints: '' },
           meetings: [],
-          jobBaseline: { budgetConfirmed: false, costCategories: false, keyDates: '', notes: '' },
-          service: { reviewRequested: false, referralCaptured: false, actions: '' },
+          jobBaseline: { budgetConfirmed: false, costCategories: false, keyDates: '', notes: '', approvedBudget: 0, budgetLockedAt: null },
+          laborCostFinal: 0,
+          additionalCosts: [],
+          postWorkEnquiries: [],
+          service: { reviewRequested: false, referralCaptured: false, actions: '', feedbackText: '' },
           operationalComplete: false,
           financialComplete: false,
           estimateReturn: null,
@@ -301,6 +308,7 @@ export function AppProvider({ children }) {
           (o) => {
             const next = {
               ...o,
+              leadType: payload.leadType ?? o.leadType,
               customer: { ...o.customer, ...payload.customer },
               site: { ...o.site, ...payload.site },
               contact: { ...o.contact, ...payload.contact },
@@ -388,6 +396,41 @@ export function AppProvider({ children }) {
         )
       },
 
+      addExternalQuote(id, quote) {
+        patchOpp(
+          id,
+          (o) => ({ ...o, externalQuotes: [{ id: uid('eq'), ...quote }, ...(o.externalQuotes || [])] }),
+          'Added external supplier quote',
+          quote.supplier || '',
+        )
+      },
+
+      removeExternalQuote(id, quoteId) {
+        patchOpp(
+          id,
+          (o) => ({ ...o, externalQuotes: (o.externalQuotes || []).filter((q) => q.id !== quoteId) }),
+          'Removed external supplier quote',
+          '',
+        )
+      },
+
+      verifyEstimate(id) {
+        patchOpp(
+          id,
+          (o) => {
+            const list = o.estimates || []
+            if (!list.length) return o
+            const latest = list.reduce((a, b) => (a.version > b.version ? a : b))
+            return {
+              ...o,
+              estimates: list.map((e) => (e.id === latest.id ? { ...e, verifiedBy: user?.id, verifiedAt: nowIso() } : e)),
+            }
+          },
+          'Verified estimate',
+          '',
+        )
+      },
+
       issueEstimate(id) {
         patchOpp(
           id,
@@ -472,6 +515,42 @@ export function AppProvider({ children }) {
 
       generateProposal(id) {
         addProposalVersion(id)
+      },
+
+      markProposalRejected(id, reason) {
+        patchOpp(
+          id,
+          (o) => {
+            const p = currentProposal(o)
+            if (!p) return o
+            return {
+              ...o,
+              proposals: o.proposals.map((x) => (x.id === p.id ? { ...x, status: 'rejected', rejectedAt: nowIso(), rejectionReason: reason } : x)),
+            }
+          },
+          'Customer rejected proposal',
+          reason,
+        )
+      },
+
+      sendBackForReEstimate(id, reason) {
+        patchOpp(
+          id,
+          (o) => {
+            const p = currentProposal(o)
+            return {
+              ...o,
+              proposals: p ? o.proposals.map((x) => (x.id === p.id ? { ...x, status: 're-estimated' } : x)) : o.proposals,
+              stage: 4,
+              slaStartedAt: nowIso(),
+              slaDueAt: addDays(nowIso(), unit?.slaDays?.[4] || 5),
+            }
+          },
+          'Sent back for re-estimate',
+          reason,
+        )
+        const opp = store.opportunities.find((o) => o.id === id)
+        notify(opp?.owners.estimatorId, 'Re-estimate requested', `${opp?.number}: ${reason}`, id)
       },
 
       presentProposal(id) {
@@ -791,6 +870,7 @@ export function AppProvider({ children }) {
                     ...s,
                     status: payload.failed ? 'failed' : 'signed_off',
                     defects: payload.defects || '',
+                    assignedTo: payload.failed ? (payload.assignedTo || '') : s.assignedTo,
                     photos: payload.photos || s.photos,
                     checklist: (s.checklist || []).map((c) => ({ ...c, done: true })),
                     signedOffAt: payload.failed ? null : nowIso(),
@@ -807,6 +887,7 @@ export function AppProvider({ children }) {
                     ...s,
                     status: payload.failed ? 'failed' : 'signed_off',
                     defects: payload.defects || '',
+                    assignedTo: payload.failed ? (payload.assignedTo || '') : s.assignedTo,
                     photos: payload.photos || s.photos,
                     checklist: (s.checklist || []).map((c) => ({ ...c, done: true })),
                     signedOffAt: payload.failed ? null : nowIso(),
