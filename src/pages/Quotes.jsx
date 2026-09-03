@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { AlertTriangle, CheckCircle2, Receipt } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Badge, CustomerCell, Empty, PageHeader, Stat } from '../components/ui'
 import { formatDate, money, pct } from '../lib/format'
@@ -44,43 +45,45 @@ export default function Quotes() {
     <>
       <PageHeader title="Quotes" lede="Every current proposal, one row per job. Open a record to negotiate, present or record acceptance." />
       <div className="stats">
-        <Stat label="Quoted (ex GST)" value={money(totalValue)} hint={`${rows.length} live quotes`} />
-        <Stat label="Accepted" value={money(acceptedValue)} hint={`${acceptedRows.length} accepted`} />
-        <Stat label="Awaiting director" value={pendingDirector} hint={pendingDirector ? 'Below-floor pricing' : 'None pending'} />
+        <Stat icon={<Receipt size={17} />} label="Quoted (ex GST)" value={money(totalValue)} hint={`${rows.length} live quotes`} style={{ '--i': 0 }} />
+        <Stat icon={<CheckCircle2 size={17} />} label="Accepted" value={money(acceptedValue)} hint={`${acceptedRows.length} accepted`} style={{ '--i': 1 }} />
+        <Stat icon={<AlertTriangle size={17} />} label="Awaiting director" value={pendingDirector} hint={pendingDirector ? 'Below-floor pricing' : 'None pending'} style={{ '--i': 2 }} />
       </div>
       <div className="card card-pad">
         {rows.length === 0 ? (
           <Empty title="No quotes yet" body="Quotes are generated from an accepted estimate on the Proposal stage." />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Job</th>
-                <th>Quote</th>
-                <th>Value</th>
-                {showCost ? <th>Margin</th> : null}
-                <th>Status</th>
-                <th>Presented / accepted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ opp, quote }) => (
-                <tr key={quote.id} onClick={() => navigate(`/opportunities/${opp.id}`)}>
-                  <td><CustomerCell opp={opp} /></td>
-                  <td>
-                    <div className="row-title">{quote.number}</div>
-                    <div className="row-meta">v{quote.version}</div>
-                  </td>
-                  <td>
-                    {money(quote.priceEx)} <span className="row-meta">({money(incGst(quote.priceEx))} inc)</span>
-                  </td>
-                  {showCost ? <td>{pct(quote.margin)}</td> : null}
-                  <td><Badge tone={TONE[quote.status] || 'neutral'}>{LABEL[quote.status] || quote.status}</Badge></td>
-                  <td>{quote.acceptedAt ? `Accepted ${formatDate(quote.acceptedAt)}` : quote.presentedAt ? `Presented ${formatDate(quote.presentedAt)}` : '—'}</td>
+          <div className="table-wrap">
+            <table className="table stack">
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th>Quote</th>
+                  <th>Value</th>
+                  {showCost ? <th>Margin</th> : null}
+                  <th>Status</th>
+                  <th>Presented / accepted</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map(({ opp, quote }) => (
+                  <tr key={quote.id} onClick={() => navigate(`/opportunities/${opp.id}`)}>
+                    <td data-label="Job"><CustomerCell opp={opp} /></td>
+                    <td data-label="Quote">
+                      <div className="row-title">{quote.number}</div>
+                      <div className="row-meta">v{quote.version}</div>
+                    </td>
+                    <td data-label="Value">
+                      {money(quote.priceEx)} <span className="row-meta">({money(incGst(quote.priceEx))} inc)</span>
+                    </td>
+                    {showCost ? <td data-label="Margin">{pct(quote.margin)}</td> : null}
+                    <td data-label="Status"><Badge tone={TONE[quote.status] || 'neutral'}>{LABEL[quote.status] || quote.status}</Badge></td>
+                    <td data-label="Presented / accepted">{quote.acceptedAt ? `Accepted ${formatDate(quote.acceptedAt)}` : quote.presentedAt ? `Presented ${formatDate(quote.presentedAt)}` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

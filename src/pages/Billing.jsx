@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { CircleDollarSign, Gift, Receipt, Wallet } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Badge, CustomerCell, Empty, PageHeader, Stat } from '../components/ui'
 import { money } from '../lib/format'
@@ -21,27 +22,29 @@ export default function Billing() {
     <>
       <PageHeader title="Billing" lede="Milestone requests (20 / 40 / 40) and the tax-invoice references recorded from accounting." />
       <div className="stats">
-        <Stat label="Requested (ex GST)" value={money(bills.reduce((s, x) => s + x.b.amountEx, 0))} hint={`${bills.length} milestone requests`} />
-        <Stat label="Paid" value={money(paid)} />
-        <Stat label="Open" value={money(unpaid)} />
-        <Stat label="Rebates in flight" value={opportunities.flatMap((o) => o.rebates || []).filter((r) => r.status !== 'Paid').length} />
+        <Stat icon={<Receipt size={17} />} label="Requested (ex GST)" value={money(bills.reduce((s, x) => s + x.b.amountEx, 0))} hint={`${bills.length} milestone requests`} style={{ '--i': 0 }} />
+        <Stat icon={<CircleDollarSign size={17} />} label="Paid" value={money(paid)} style={{ '--i': 1 }} />
+        <Stat icon={<Wallet size={17} />} label="Open" value={money(unpaid)} style={{ '--i': 2 }} />
+        <Stat icon={<Gift size={17} />} label="Rebates in flight" value={opportunities.flatMap((o) => o.rebates || []).filter((r) => r.status !== 'Paid').length} style={{ '--i': 3 }} />
       </div>
       <div className="card card-pad">
         {bills.length === 0 ? <Empty title="No billing requests yet" body="They appear automatically on acceptance, material delivery and commissioning." /> : (
-          <table className="table">
-            <thead><tr><th>Job</th><th>Milestone</th><th>Amount</th><th>Invoice</th><th>Status</th></tr></thead>
-            <tbody>
-              {bills.map(({ opp, b }) => (
-                <tr key={b.id} onClick={() => navigate(`/opportunities/${opp.id}`)}>
-                  <td><CustomerCell opp={opp} /></td>
-                  <td>{b.percent}% · {b.event}</td>
-                  <td>{money(b.amountEx)}</td>
-                  <td>{b.invoiceNumber || '—'}</td>
-                  <td><Badge tone={TONE[b.paymentStatus] || TONE[b.status] || 'neutral'}>{b.paymentStatus === 'paid' ? 'Paid' : b.invoiceNumber ? 'Invoiced' : b.status}</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="table stack">
+              <thead><tr><th>Job</th><th>Milestone</th><th>Amount</th><th>Invoice</th><th>Status</th></tr></thead>
+              <tbody>
+                {bills.map(({ opp, b }) => (
+                  <tr key={b.id} onClick={() => navigate(`/opportunities/${opp.id}`)}>
+                    <td data-label="Job"><CustomerCell opp={opp} /></td>
+                    <td data-label="Milestone">{b.percent}% · {b.event}</td>
+                    <td data-label="Amount">{money(b.amountEx)}</td>
+                    <td data-label="Invoice">{b.invoiceNumber || '—'}</td>
+                    <td data-label="Status"><Badge tone={TONE[b.paymentStatus] || TONE[b.status] || 'neutral'}>{b.paymentStatus === 'paid' ? 'Paid' : b.invoiceNumber ? 'Invoiced' : b.status}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

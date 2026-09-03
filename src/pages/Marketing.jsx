@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
+import { CheckCircle2, Megaphone, Sparkles, Target, Wallet } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { Field, PageHeader, Stat } from '../components/ui'
+import { Card, Empty, Field, PageHeader, Stat, Tabs } from '../components/ui'
 import { canApproveCampaign, canManageCampaigns } from '../lib/permissions'
 import { money } from '../lib/format'
 import { selectedOption } from '../lib/workflow'
+import { toast } from '../lib/toast'
 
 const METRICS = [
   { key: 'leads', label: 'Leads' },
@@ -98,32 +100,25 @@ export default function Marketing() {
       />
 
       <div className="stats">
-        <Stat label="Campaigns" value={rows.length} hint="In this business unit" />
-        <Stat label="Linked leads" value={totalLeads} hint="Opportunities with a campaign" />
-        <Stat label="Won from campaigns" value={totalWon} hint="Accepted / in delivery" />
-        <Stat label="Recorded spend" value={money(totalSpend)} hint="Actual marketing expenditure" />
+        <Stat icon={<Megaphone size={17} />} label="Campaigns" value={rows.length} hint="In this business unit" style={{ '--i': 0 }} />
+        <Stat icon={<Target size={17} />} label="Linked leads" value={totalLeads} hint="Opportunities with a campaign" style={{ '--i': 1 }} />
+        <Stat icon={<CheckCircle2 size={17} />} label="Won from campaigns" value={totalWon} hint="Accepted / in delivery" style={{ '--i': 2 }} />
+        <Stat icon={<Wallet size={17} />} label="Recorded spend" value={money(totalSpend)} hint="Actual marketing expenditure" style={{ '--i': 3 }} />
       </div>
 
-      <div className="card card-pad" style={{ marginBottom: 16 }}>
-        <h2>Campaign performance</h2>
+      <Card title="Campaign performance" icon={<Sparkles size={16} />} style={{ marginBottom: 16 }}>
         <p className="sub">
           {leader && (leader[metric] || 0) > 0
             ? `${leader.name} is currently highest on ${METRICS.find((m) => m.key === metric)?.label.toLowerCase()}.`
             : 'Link leads to a campaign to see performance.'}
         </p>
-        <div className="tabs" style={{ marginTop: 8 }}>
-          {METRICS.map((m) => (
-            <button key={m.key} type="button" className={metric === m.key ? 'active' : ''} onClick={() => setMetric(m.key)}>
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <Tabs value={metric} onChange={setMetric} items={METRICS} />
         {rows.length === 0 ? (
-          <p className="lede">No campaigns in this unit yet.</p>
+          <Empty title="No campaigns in this unit yet" body="Add a campaign brief below to start tracking performance." />
         ) : (
           <CampaignChart rows={rows} metric={metric} />
         )}
-      </div>
+      </Card>
 
       {(campaigns || []).map((c) => {
         const stat = rows.find((r) => r.id === c.id)
@@ -137,7 +132,7 @@ export default function Marketing() {
             </div>
             <p className="lede">{c.objective}</p>
             {c.status !== 'approved' && canApproveCampaign(user) ? (
-              <button className="btn btn-primary btn-sm" onClick={() => approveCampaign(c.id)}>Approve campaign</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { approveCampaign(c.id); toast(`${c.name} approved`) }}>Approve campaign</button>
             ) : null}
           </div>
         )
@@ -167,6 +162,7 @@ export default function Marketing() {
                 status: 'draft',
               })
               setDraft({ name: '', channel: '', audience: '', objective: '', budget: '', actualSpend: '' })
+              toast('Campaign brief saved')
             }}
           >
             Save brief

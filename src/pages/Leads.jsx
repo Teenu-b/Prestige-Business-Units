@@ -44,40 +44,42 @@ export default function Leads() {
         {rows.length === 0 ? (
           <Empty title="No leads waiting" body="Every lead has been qualified or moved out. Capture a new one to get started." />
         ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Lead</th>
-                <th>Qualification</th>
-                <th>Meeting / site visit</th>
-                <th>Next action</th>
-                <th>SLA</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((o) => {
-                const due = relativeDue(o.slaDueAt)
-                const hasMeeting = (o.meetings || []).length > 0
-                const hasEvidence = (o.documents || []).some((d) => d.stage === 2 && (d.type === 'site_photo' || d.type === 'drawing'))
-                const qual = QUALIFICATION.find((x) => x.key === o.qualification) || QUALIFICATION[1]
-                return (
-                  <tr key={o.id} onClick={() => navigate(`/opportunities/${o.id}`)}>
-                    <td><CustomerCell opp={o} /></td>
-                    <td><Badge tone={o.qualification === 'qualified' ? 'success' : o.qualification === 'disqualified' ? 'danger' : 'warning'}>{qual.label}</Badge></td>
-                    <td>
-                      {hasMeeting && hasEvidence ? (
-                        <Badge tone="success">Ready to qualify</Badge>
-                      ) : (
-                        <Badge tone="neutral">{hasMeeting ? 'Meeting logged' : hasEvidence ? 'Site evidence added' : 'Not started'}</Badge>
-                      )}
-                    </td>
-                    <td>{o.nextAction || '—'}</td>
-                    <td><Badge tone={due.tone}>{due.label}</Badge></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <div className="table-wrap">
+            <table className="table stack">
+              <thead>
+                <tr>
+                  <th>Lead</th>
+                  <th>Qualification</th>
+                  <th>Meeting / site visit</th>
+                  <th>Next action</th>
+                  <th>SLA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((o) => {
+                  const due = relativeDue(o.slaDueAt)
+                  const hasMeeting = (o.meetings || []).length > 0
+                  const hasEvidence = (o.documents || []).some((d) => d.stage === 2 && (d.type === 'site_photo' || d.type === 'drawing'))
+                  const qual = QUALIFICATION.find((x) => x.key === o.qualification) || QUALIFICATION[1]
+                  return (
+                    <tr key={o.id} onClick={() => navigate(`/opportunities/${o.id}`)}>
+                      <td data-label="Lead"><CustomerCell opp={o} /></td>
+                      <td data-label="Qualification"><Badge tone={o.qualification === 'qualified' ? 'success' : o.qualification === 'disqualified' ? 'danger' : 'warning'}>{qual.label}</Badge></td>
+                      <td data-label="Meeting / site visit">
+                        {hasMeeting && hasEvidence ? (
+                          <Badge tone="success">Ready to qualify</Badge>
+                        ) : (
+                          <Badge tone="neutral">{hasMeeting ? 'Meeting logged' : hasEvidence ? 'Site evidence added' : 'Not started'}</Badge>
+                        )}
+                      </td>
+                      <td data-label="Next action">{o.nextAction || '—'}</td>
+                      <td data-label="SLA"><Badge tone={due.tone}>{due.label}</Badge></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

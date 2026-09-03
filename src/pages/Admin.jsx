@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { RefreshCw, Settings, UserPlus, Users } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { Badge, Field, Modal, PageHeader } from '../components/ui'
+import { Badge, Field, Modal, PageHeader, Tabs } from '../components/ui'
 import { ROLES } from '../data/constants'
 import { canAdmin, hasRole } from '../lib/permissions'
+import { toast } from '../lib/toast'
 
 function emptyDraft(unitId) {
   return {
@@ -98,6 +100,7 @@ export default function Admin() {
       password: draft.password.trim(),
     })
     closeForm()
+    toast(editing ? 'User updated' : 'User added')
   }
 
   const confirmDelete = () => {
@@ -106,6 +109,7 @@ export default function Admin() {
     const lastAdmin = pendingDelete.roles.includes('ADM') && users.filter((u) => u.roles.includes('ADM')).length === 1
     if (lastAdmin) return
     deleteUser(pendingDelete.id)
+    toast(`${pendingDelete.name} removed`, 'info')
     setPendingDelete(null)
   }
 
@@ -123,12 +127,16 @@ export default function Admin() {
       <PageHeader
         title="Administration"
         lede="Users, roles, and the parameters this business unit runs on — margin floor, SLA days, billing split and commission tiers."
-        actions={admin && tab === 'users' ? <button className="btn btn-primary" onClick={openAdd}>Add user</button> : null}
+        actions={admin && tab === 'users' ? <button className="btn btn-primary" onClick={openAdd}><UserPlus size={16} /> Add user</button> : null}
       />
-      <div className="tabs">
-        <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}>Users</button>
-        <button className={tab === 'config' ? 'active' : ''} onClick={() => setTab('config')}>Unit settings</button>
-      </div>
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'users', label: 'Users', icon: <Users size={14} />, count: listed.length },
+          { key: 'config', label: 'Unit settings', icon: <Settings size={14} /> },
+        ]}
+      />
 
       {tab === 'users' ? (
         <div className="card card-pad">
@@ -174,7 +182,11 @@ export default function Admin() {
             <Field label="Lead SLA (days)"><input type="number" defaultValue={unit.slaDays[2]} disabled={!admin} onBlur={(e) => admin && saveUnit({ ...unit, slaDays: { ...unit.slaDays, 2: Number(e.target.value) } })} /></Field>
           </div>
           <p className="lede" style={{ marginTop: 16 }}>Commission tiers and remaining SLA values can be extended here without a code change in a later build. Billing percentages must total 100%.</p>
-          {admin ? <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={resetDemo}>Reset demo data</button> : null}
+          {admin ? (
+            <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => { resetDemo(); toast('Demo data reset', 'info') }}>
+              <RefreshCw size={15} /> Reset demo data
+            </button>
+          ) : null}
         </div>
       )}
 

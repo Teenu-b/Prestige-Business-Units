@@ -1,6 +1,7 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppProvider, useApp } from './context/AppContext'
 import Layout from './components/Layout'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Pipeline from './pages/Pipeline'
@@ -20,7 +21,11 @@ import Marketing from './pages/Marketing'
 
 function Guard({ children, roles }) {
   const { user } = useApp()
-  if (!user) return <Navigate to="/login" replace />
+  const location = useLocation()
+  if (!user) {
+    if (location.pathname === '/') return <Landing />
+    return <Navigate to="/login" replace />
+  }
   if (roles && !hasRole(user, ...roles)) return <Navigate to="/" replace />
   return children
 }

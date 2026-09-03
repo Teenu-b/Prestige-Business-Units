@@ -1,20 +1,64 @@
-import { useMemo, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Bell, Menu, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import {
+  Bell,
+  Briefcase,
+  CircleDollarSign,
+  ClipboardCheck,
+  FileText,
+  Home,
+  Megaphone,
+  Menu,
+  Receipt,
+  Search,
+  Settings,
+  ShoppingCart,
+  Users,
+  X,
+} from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { initials } from '../lib/format'
 import { hasRole, navFor } from '../lib/permissions'
 import { ROLES } from '../data/constants'
 import ErrorBoundary from './ErrorBoundary'
+import { ToastHost } from './ui'
+import CommandPalette from './CommandPalette'
+
+const NAV_ICONS = {
+  '/': Home,
+  '/leads': ClipboardCheck,
+  '/pipeline': Briefcase,
+  '/marketing': Megaphone,
+  '/approvals': FileText,
+  '/procurement': ShoppingCart,
+  '/quotes': Receipt,
+  '/costs': CircleDollarSign,
+  '/billing': CircleDollarSign,
+  '/referrers': Users,
+  '/admin': Settings,
+}
 
 export default function Layout() {
   const { user, unit, units, switchUnit, logout, notifications } = useApp()
   const navigate = useNavigate()
+  const location = useLocation()
   const [open, setOpen] = useState(false)
   const [menu, setMenu] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const unread = (notifications || []).filter((n) => !n.read).length
   const items = useMemo(() => navFor(user), [user])
   const roleLabel = user.roles.map((r) => ROLES[r]?.name).filter(Boolean).join(' · ')
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   return (
     <div className="app-shell">
@@ -25,16 +69,28 @@ export default function Layout() {
         <div className="brand">
           <div className="brand-mark">P</div>
           <div>
-            <div className="brand-name">Prestige</div>
+            <div className="brand-name">
+              Prestige
+              {unit?.code ? <span className="brand-tag">{unit.code}</span> : null}
+            </div>
             <div className="brand-sub">Lead to service</div>
           </div>
         </div>
+        <button type="button" className="sidebar-search" onClick={() => setPaletteOpen(true)}>
+          <Search size={15} />
+          <span>Search…</span>
+          <kbd>⌘K</kbd>
+        </button>
         <nav className="nav" onClick={() => setOpen(false)}>
-          {items.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.to === '/'}>
-              {item.label}
-            </NavLink>
-          ))}
+          {items.map((item) => {
+            const Icon = NAV_ICONS[item.to] || Home
+            return (
+              <NavLink key={item.to} to={item.to} end={item.to === '/'}>
+                <Icon size={17} />
+                {item.label}
+              </NavLink>
+            )
+          })}
         </nav>
         <div className="sidebar-foot">
           {unit?.name}
@@ -66,11 +122,11 @@ export default function Layout() {
             </button>
             <div className="menu">
               <button className="who" onClick={() => setMenu((v) => !v)}>
+                <span className="avatar">{initials(user.name)}</span>
                 <span>
                   {user.name}
                   <small>{roleLabel}</small>
                 </span>
-                <span className="avatar">{initials(user.name)}</span>
               </button>
               {menu ? (
                 <div className="menu-pop">
@@ -85,10 +141,14 @@ export default function Layout() {
         </header>
         <div className="content">
           <ErrorBoundary>
-            <Outlet />
+            <div key={location.pathname} className="route-fade">
+              <Outlet />
+            </div>
           </ErrorBoundary>
         </div>
       </div>
+      <ToastHost />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   )
 }

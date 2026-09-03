@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { UploadCloud } from 'lucide-react'
 import { formatBytes, filesToRecords, isImageFile } from '../lib/files'
 import { formatDate } from '../lib/format'
 
@@ -54,6 +55,7 @@ export default function FileUpload({
           disabled={busy}
           onChange={(e) => pick(e.target.files)}
         />
+        {!compact ? <UploadCloud className="drop-icon" size={22} strokeWidth={1.5} /> : null}
         <span>{busy ? 'Uploading…' : compact ? 'Upload photos or files' : 'Drop files here or click to upload photos and documents'}</span>
       </label>
       {error ? <div className="alert danger" style={{ marginTop: 8 }}>{error}</div> : null}

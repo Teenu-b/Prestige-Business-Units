@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Field } from '../components/ui'
 import { DEMO_PASSWORD } from '../data/constants'
@@ -35,13 +36,13 @@ export default function Login() {
     <div className="login-wrap">
       <section className="login-art">
         <div>
-          <div className="brand">
+          <Link to="/" className="brand" style={{ width: 'fit-content' }}>
             <div className="brand-mark">P</div>
             <div>
               <div className="brand-name">Prestige</div>
               <div className="brand-sub">Prestige & Sydpro</div>
             </div>
-          </div>
+          </Link>
           <h2>One record from lead to service. Two businesses.</h2>
           <p>
             Capture any lead — campaign, referrer, inbound or repeat — then estimate, deliver and handover.
@@ -51,7 +52,7 @@ export default function Login() {
         <p>Prestige Renewable Solutions · Sydpro Electrical & Solar Services</p>
       </section>
       <section className="login-panel">
-        <form className="login-card" onSubmit={submit}>
+        <form className="login-card route-fade" onSubmit={submit}>
           <h1>Sign in</h1>
           <p className="lede">Select a demo profile or enter credentials. Password for all demo users is {DEMO_PASSWORD}.</p>
 
@@ -80,7 +81,7 @@ export default function Login() {
           </div>
           {error ? <div className="alert danger">{error}</div> : null}
           <button className="btn btn-primary" type="submit" style={{ width: '100%', justifyContent: 'center' }}>
-            Continue
+            Continue <ArrowRight size={16} />
           </button>
         </form>
       </section>
