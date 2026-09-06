@@ -512,6 +512,15 @@ img { max-width: 100%; }
   margin-bottom: 18px;
   flex-wrap: wrap;
 }
+.add-note-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.add-note-row input { flex: 1; max-width: none; }
 .search, .select, .field input, .field select, .field textarea {
   border: 1px solid var(--line-strong);
   background: var(--surface);

@@ -54,19 +54,22 @@ export function Stat({ label, value, hint, icon, trend, spark, style }) {
   )
 }
 
-export function Card({ title, sub, children, pad = true, icon, interactive = false, onClick, className = '', style }) {
+export function Card({ title, sub, children, pad = true, icon, actions, interactive = false, onClick, className = '', style }) {
   return (
     <section className={`card ${interactive ? 'interactive' : ''} ${className}`.trim()} onClick={onClick} style={style}>
       <div className={pad ? 'card-pad' : undefined} style={pad ? undefined : { padding: '22px 24px 8px' }}>
         {title ? (
-          icon ? (
-            <div className="card-head">
-              <span className="card-icon">{icon}</span>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            {icon ? (
+              <div className="card-head">
+                <span className="card-icon">{icon}</span>
+                <h2>{title}</h2>
+              </div>
+            ) : (
               <h2>{title}</h2>
-            </div>
-          ) : (
-            <h2>{title}</h2>
-          )
+            )}
+            {actions ? <div style={{ flexShrink: 0 }}>{actions}</div> : null}
+          </div>
         ) : null}
         {sub ? <p className="sub">{sub}</p> : null}
         {children}

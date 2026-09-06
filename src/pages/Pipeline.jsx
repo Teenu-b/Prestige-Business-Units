@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Avatar, Empty, PageHeader } from '../components/ui'
 import { STAGES } from '../data/constants'
-import { money } from '../lib/format'
+import { daysInStage, money } from '../lib/format'
 import { canAdvance, canCreateLead, hasRole } from '../lib/permissions'
 import { belowFloor, selectedOption, stageMeta, workStage } from '../lib/workflow'
 import { toast } from '../lib/toast'
@@ -15,12 +15,6 @@ function dealBadge(o) {
   if (ageDays <= 7) return { label: 'New', tone: 'info' }
   if (o.leadSource === 'referrer') return { label: 'Referral', tone: 'neutral' }
   return null
-}
-
-function daysInStage(o) {
-  const since = o.slaStartedAt || o.createdAt
-  if (!since) return null
-  return Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 86400000))
 }
 
 export default function Pipeline() {
@@ -139,7 +133,7 @@ export default function Pipeline() {
                     const owner = users.find((u) => u.id === (o.owners?.salespersonId || o.owners?.leadId))
                     const draggable = !isReferrer && canAdvance(user, o)
                     const barColor = margin == null ? 'var(--line-strong)' : belowFloor(margin, o.marginFloor) ? 'var(--danger)' : 'var(--success)'
-                    const days = daysInStage(o)
+                    const days = daysInStage(o.slaStartedAt || o.createdAt)
                     return (
                       <div
                         key={o.id}

@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   FileText,
   Home,
+  ListChecks,
   Megaphone,
   Menu,
   Receipt,
@@ -26,6 +27,7 @@ import CommandPalette from './CommandPalette'
 
 const NAV_ICONS = {
   '/': Home,
+  '/my-tasks': ListChecks,
   '/leads': ClipboardCheck,
   '/pipeline': Briefcase,
   '/marketing': Megaphone,

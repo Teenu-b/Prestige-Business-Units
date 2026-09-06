@@ -115,7 +115,7 @@ export const BILLING_MILESTONES = [
 ]
 
 export const DEMO_PASSWORD = 'Prestige1'
-export const STORAGE_KEY = 'prestige-bpm-v12'
+export const STORAGE_KEY = 'prestige-bpm-v13'
 export const GST_RATE = 0.1
 export const DEFAULT_MARGIN_FLOOR = 18
 export const DEFAULT_SLA_DAYS = {
