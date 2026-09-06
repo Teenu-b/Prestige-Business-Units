@@ -61,6 +61,11 @@ export function relativeTime(iso) {
   return formatDate(iso)
 }
 
+export function daysInStage(iso) {
+  if (!iso) return null
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000))
+}
+
 export function relativeDue(iso) {
   if (!iso) return { label: 'No SLA', tone: 'neutral' }
   const due = new Date(iso)

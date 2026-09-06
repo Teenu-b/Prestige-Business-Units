@@ -20,6 +20,7 @@ import {
   MapPin,
   MessageSquare,
   PackageSearch,
+  Plus,
   Wrench,
 } from 'lucide-react'
 
@@ -78,7 +79,16 @@ export default function Opportunity() {
   const [tab, setTab] = useState('work')
   const [gateError, setGateError] = useState(null)
   const [viewStage, setViewStage] = useState(workStage(opp?.stage))
+  const [noteText, setNoteText] = useState('')
   const workRef = useRef(null)
+
+  const addNote = () => {
+    const text = noteText.trim()
+    if (!text) return
+    app.updateOpportunity(opp.id, {}, 'Note added', text)
+    setNoteText('')
+    toast('Note added to history')
+  }
 
   useEffect(() => {
     setViewStage(workStage(opp?.stage))
@@ -198,6 +208,18 @@ export default function Opportunity() {
       ) : null}
       {tab === 'history' ? (
         <div className="card card-pad">
+          <div className="add-note-row">
+            <input
+              className="search"
+              placeholder="Add a note to this record's history — a call, a site chat, anything worth remembering…"
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addNote() }}
+            />
+            <button type="button" className="btn btn-primary btn-sm" disabled={!noteText.trim()} onClick={addNote}>
+              <Plus size={15} /> Add note
+            </button>
+          </div>
           {(opp.audit || []).map((a) => (
             <div className="list-item" key={a.id}>
               <div>

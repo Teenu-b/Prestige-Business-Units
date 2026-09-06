@@ -345,7 +345,12 @@ export default function Dashboard() {
             )}
           </Card>
 
-          <Card title="My queue" sub="Items you own, with SLA status." style={{ marginTop: 20 }}>
+          <Card
+            title="My queue"
+            sub="Items you own, with SLA status."
+            actions={<Link to="/my-tasks" className="btn btn-ghost btn-sm">View all</Link>}
+            style={{ marginTop: 20 }}
+          >
             {mine.length === 0 ? <p className="lede">Nothing assigned to you in this unit.</p> : (
               <div className="list-stack">
                 {mine.slice(0, 5).map((o) => {
